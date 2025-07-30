@@ -1,0 +1,2918 @@
+---
+title: "Sibling_Victimisation_Script_OSF"
+author: "Elise Sellars"
+date: "16/11/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+## **Introduction**
+This R Markdown document compiles the R scripts used to conduct statistical analyses in the paper: “Children's resilience to sibling victimisation: the role of family, peer, school and neighbourhood factors”.
+
+Secondary analyses were conducted on data from the Millennium Cohort Study, an ongoing longitudinal birth cohort study following over 19,000 young people born between 2000 and 2002 across the UK (England, Scotland, Wales, and Northern Ireland).
+
+The analyses are as following:
+
+**1.Univariate linear regressions** to explore the association between sibling victimisation (at age 11 and/or age 14 years) and later mental health and wellbeing (at age 17 years). This includes extracting residuals to be used in later analyses exploring children's resilience to sibling victimisation. 
+
+**2. Univariate and multivariate linear regressions** to explore the risk and promotive factors associated with children's resilience to sibling victimisation. 
+
+**3.Exploratory analyses** to determine whether any promotive factors identified using imputed data are in fact protective factors. 
+
+**4. Sensitivity analysis** to compare covariates between those with full sibling victimisation (exposure) and mental health and wellbeing (outcome) data, and those with complete exposure data but incomplete outcome data.
+
+**5.Multiple imputation using chained equations** to impute missing data in covariates, as well as risk and promotive factors.
+
+**6. Re-running analyses in stages 1-4 above, using imputed data**
+
+
+To begin, we will load the packages needed for this session:
+```{r}
+library(foreign) #for loading data
+library(psych) #for data manipulation
+library(plyr) #for data manipulation
+library(dplyr)#for data manipulation
+library(tidyr) #for data manipulation
+library(car) #for data manipulation
+
+library(sjmisc) #to assist with recoding variables
+library(lm.beta) #standardises beta values for linear regression
+library(ez) #for anovas
+
+library(mice) # for multiple imputation
+library(miceadds) # for multiple imputation
+```
+
+## **0. Merge MCS datasets**
+
+We will now merge the relevant variables (covariates, sibling victimisation exposure, risk and promotive factors, mental health and wellbeing outcomes, auxiliary variables for imputation) from their respective MCS datasets (Sweeps  1-7; ages 9 months, 3, 5, 7, 11, 14 and 17 years). We will also read in the MCS longitudinal family file for sampling weights.
+
+
+Firstly, we will read in the relevant datafiles from SPSS:
+```{r}
+# Set your working directory
+setwd("") #insert your working directory here
+
+#reading in the MCS datafiles from SPSS 
+suppressWarnings({
+data1 <- read.spss("mcs1_cm_derived.sav", to.data.frame=TRUE)
+
+data2 <- read.spss("mcs1_family_derived.sav", to.data.frame=TRUE)
+
+data3<- read.spss("mcs1_hhgrid.sav", to.data.frame=TRUE)
+
+data4<- read.spss("mcs1_parent_derived.sav", to.data.frame=TRUE)
+
+data5<- read.spss("mcs1_parent_interview.sav", to.data.frame=TRUE)
+
+data6<- read.spss("mcs2_family_derived.sav", to.data.frame=TRUE)
+
+data7<- read.spss("mcs2_parent_derived.sav", to.data.frame=TRUE)
+
+data8 <- read.spss("mcs2_parent_interview.sav", to.data.frame=TRUE)
+
+data9 <- read.spss("mcs4_cm_derived.sav", to.data.frame=TRUE)
+
+data10 <- read.spss("mcs4_parent_cm_interview.sav", to.data.frame=TRUE)
+
+data11 <- read.spss("mcs4_parent_derived.sav", to.data.frame=TRUE)
+
+data12<- read.spss("mcs4_parent_interview.sav", to.data.frame=TRUE)
+
+data13 <- read.spss("mcs5_family_derived.sav", to.data.frame=TRUE)
+
+data14 <- read.spss("mcs5_cm_interview.sav", to.data.frame=TRUE)
+
+data15 <- read.spss("mcs6_cm_interview.sav", to.data.frame=TRUE)
+
+data16 <- read.spss("mcs6_family_derived.sav", to.data.frame=TRUE)
+
+data17 <- read.spss("mcs6_parent_cm_interview.sav", to.data.frame=TRUE)
+
+data18 <- read.spss("mcs6_parent_interview.sav", to.data.frame=TRUE)
+
+data19 <- read.spss("mcs7_cm_derived.sav", to.data.frame=TRUE)
+
+data20 <- read.spss("mcs7_cm_interview.sav", to.data.frame=TRUE)
+
+data21<-read.spss("mcs4_family_derived.sav", to.data.frame=TRUE)
+
+data22<- read.spss("mcs2_cm_derived.sav", to.data.frame=TRUE)
+
+data23<-read.spss("mcs3_cm_derived.sav", to.data.frame=TRUE)
+
+data24 <-read.spss("mcs_longitudinal_family_file.sav", to.data.frame=TRUE)
+})
+
+```
+
+Now that we have read in the datasets from SPSS, we will filter within datasets which include parent reported data (parent level and household grid datasets) to select responses from a. the main caregiver only and b. about the cohort member (if applicable):
+```{r}
+#For household grid, filtering responses based on whether the data is about the cohort member, there are only 1st and 2nd CMs, so filtering to include these two
+data3edited<-filter (data3,ACNUM00 == "1st Cohort Member of the family"|ACNUM00 == "2nd Cohort Member of the family") #Cohort member
+
+#For datasets with parent responses, filtering so that only the main interviewer's response is included. Please note, this means that at this stage there can be duplicate MCSIDs, because there might be a main interview for the 1st and 2nd cohort member within one family
+
+data4edited<-filter (data4,AELIG00 == "Main Interview ")#Note additional space at end of interview
+data5edited<-filter (data5, AELIG00 == "Main Interview")
+data7edited<-filter (data7,BELIG00 == "Main Interview ") #Note additional space at end of interview
+data8edited<-filter (data8,BELIG00=="Main Interview")
+data10edited<-filter (data10,DELIG00=="Main Interview ")#Note additional space at end of interview
+data11edited<-filter (data11,DELIG00=="Main Interview ")#Note additional space at end of interview
+data12edited<-filter (data12,DELIG00=="Main Interview ")#Note additional space at end of interview
+data17edited<-filter (data17,FELIG00=="Main Interview ")#Note additional space at end of interview
+data18edited<-filter (data18,FELIG00=="Main Interview ")#Note additional space at end of interview
+```
+
+Next, we will select the columns (variables) needed from each of the data files:
+```{r}
+#For each dataset, along with the variables of interest, we will also  select the  MSCID and, where relevant, cohort member number within an MCS family, as this will be useful for later merging. 
+
+data1filtered <- data1%>% select(MCSID,ACNUM00,ADC06E00,ADBWGT00,ADGEST00) # 9m parent report- CM Ethnicity, birth weight and gestation time
+
+data2filtered <- data2%>%select(MCSID,ADNOCM00,ADOTHS00,ADOEDP00,ADMBMIPRE,ADROOW00) # 9m parent report- CM number of siblings, financial strain, mother BMI pre-pregnancy, housing tenure
+
+data3filtered <- data3edited%>% select(MCSID,ACNUM00,AHCSEX00) #CM sex (9 months) parent report
+
+data4filtered <- data4edited%>% select(MCSID,APNUM00,ADDAGB00, ADWGBK00) #9m parent report- age at CM birth, weight of respondent before CM birth
+
+data5filtered <- data5edited%>% select(MCSID,APNUM00,APSMKR00,APDROF00,APAREA00,APACQU00, APFCIN00, APFORC00,ADWKST00, APTIRE00,APDEPR00,APWORR00,APRAGE00,APSCAR00,APUPSE00,APKEYD00,APNERV00,APHERA00,APFCIN00 ) #9m parent report- whether anyone smokes in room with CM , maternal alcohol consumption during pregnancy, ,mother's opinion of area, highest academic qualification of mother,current legal marital status,partner ever used force in relationship, paid work status, Maternal Depression- Tired most of time,Often miserable or depressed, Often worried about things, Often gets in violent rage, Suddenly scared for no good reason, Easily upset or irritated, Constantly keyed up or jittery, Every little thing gets on nerves, Heart often races like mad
+
+data6filtered <- data6%>% select(MCSID,BDNOCM00,BDHINC00) #Household income (3 years) parent report
+
+data7filtered <- data7edited%>% select(MCSID,BDD07S00) #Maternal occupation (3 years) parent report NO identifier added for CM number within family as just asked once for twins
+
+data8filtered <- data8edited%>% select(MCSID,BPACQU00) #Maternal education (highest academic qualification) (3 years) parent report NO identifier added for CM number within family as just asked once for twins
+
+data9filtered <- data9%>% select(MCSID,DCNUM00,DDEMOTION, DDPEER, DDCONDUCT, DDHYPER) #Internalising (emotion and peer problems) and externalising (conduct and hyperactivity) behaviour (7 years) parent report
+
+data10filtered <- data10edited%>% select(MCSID,DCNUM00,DPAUTS00, DPSDPB00) #ASD diagnosis and peer problems-picked on or bullied others(7 years) parent report
+
+data11filtered <- data11edited%>% select(MCSID,DDKESSLER) #Parental depression (7 years) parent report NO identifier added for CM number within family as just asked once for twins
+
+data12filtered <- data12edited%>% select(MCSID,DPALDR00,DPFORC00) #Parental substance abuse and domestic violence (Partner ever used force in relationship) (7 years) parent report NO identifier added for CM number within family as just asked once for twins
+
+data13filtered <- data13%>% select(MCSID,EOTHS00) #Number of siblings (11 years) parent report, NO identifier added for CM number within family as just asked once for twins
+
+data14filtered <- data14%>% select(MCSID,ECNUM00,ECQ54X00) #Sibling victimisation (11 years) cohort member (CM) report
+
+data15filtered <- data15%>% select(MCSID,FCNUM00,FCBULB00, FCNUFR00, FCSCBE00, FCSINT00, FCSUNH00, FCSTIR00, FCSCWA00, FCMNWO00,FCSAFD00) #Sibling victimisation, close friends, school motivation (FCSCBE00 to FCMNWO00) and neighbourhood safety(14 years) CM report
+
+data16filtered <- data16%>% select(MCSID,FOEDP000, FDTOTP00) #Financial strain ( OECD Below 60% median indicator), number of people in household, (age 14) parent report, no identifier added for CM number within family as just asked once for twins
+
+data17filtered <- data17edited%>% select(MCSID,FCNUM00,FPWHET00,FPWHOT00, FPWHAT0A,FPTAIM00) # parental monitoring and talk about things ortant to CM (parental rel) (age 14) parent report
+
+data18filtered <- data18edited%>% select(MCSID,FPROMA00)#Number of rooms  (age 14) parent report, no identifier added for CM number within family as just asked once for twins
+
+data19filtered <- data19%>% select(MCSID,GCNUM00, GEMOTION_C,GPEER_C,GHYPER_C,GCONDUCT_C,GDWEMWBS) #Internalising and externalising, WEMWBS (age 17) CM report
+
+data20filtered <- data20%>% select(MCSID,GCNUM00,GCSHCU00,GCSHBU00,GCSHBR00,GCSHOD00,GCSHPU00,GCSHRM00,GCSUIC00) #Self-harm (age 17) CM report
+
+data21filtered <- data21%>% select(MCSID,DDSSIB00) #Step-siblings(age 7) parent report
+
+data22filtered <- data22%>% select(MCSID,BCNUM00,BEBDTOT) #SDQ total difficulties score age 3
+                                                
+data23filtered <- data23%>% select(MCSID,CCNUM00,CEBDTOT)#SDQ total difficulties score age 5
+
+data24filtered <- data24%>% select(MCSID,PTTYPE2) #sampling weight variable
+        
+```
+
+
+Next, we will rename the variables so they are easily identifiable:
+```{r}
+colnames(data1filtered) <- c('MCSID','CM_number','CM_Ethnicity','CM_birthweight', 'CM_gestation')
+colnames(data2filtered) <- c('MCSID','CM_number','number_of_sibling_s9m', 'financial_strain_9m', 'pre_BMI','house_tenure')
+colnames(data3filtered) <- c('MCSID', 'CM_number','CM_Sex')
+colnames(data4filtered) <- c('MCSID','CM_number', 'Mat_age_birth', 'pre_weight') 
+colnames(data5filtered) <- c('MCSID','CM_number','Smoke_aroundCM', 'Mat_alc', 'Mat_opin_area', 'Highest_academ_mat','Marital_stat', 'Domestic_violence_9m','paid_work', 'Tired', 'miserable', 'worried', 'rage', 'scared', 'irritated', 'jittery', 'nerves', 'heart')
+colnames(data6filtered) <- c('MCSID','CM_number', 'household_income_3yr')
+colnames(data7filtered) <- c('MCSID', 'Maternal_occupation_3yr')
+colnames(data8filtered) <- c('MCSID', 'Maternal_education_3yr')
+colnames(data9filtered) <- c('MCSID', 'CM_number','emotion_prob_7yr', 'peer_prob_7yr', 'conduct_prob_7yr', 'hyperactivity_7yr')
+colnames(data10filtered) <- c('MCSID','CM_number','ASD_diagnosis_7yrs','peer_problems_picked_on_bullied_parent_7yrs')
+colnames(data11filtered) <- c('MCSID','parental_depression_7yrs')
+colnames(data12filtered) <- c('MCSID','parental_substance_7yrs', 'parental_domestic_violence_7years')
+colnames(data13filtered) <- c('MCSID','number_of_siblings_11yrs')
+colnames(data14filtered) <- c('MCSID','CM_number','sibling_victimisation_11yrs')
+colnames(data15filtered) <- c('MCSID','CM_number','sibling_victimisation_14yrs','close_friends_14yrs','school_motivation_try_best_14yrs','school_motivation_interesting_14yrs','school_motivation_unhappy_14yrs','school_motivation_tired_14yrs','school_motivation_waste_of_time_14yrs','school_motivation_difficult_keep_mind_on_work_14yrs','neighbourhood_safety_14yrs')
+colnames(data16filtered) <- c('MCSID','financial_strain_14yrs', 'number_people_household_14yrs')
+colnames(data17filtered) <- c('MCSID','CM_number','parental_monitoring_where_14yrs', 'parental_monitoring_who_14yrs','parental_monitoring_what_14yrs', 'parent_rel_talk_about_ortant_14yrs')
+colnames(data18filtered) <- c('MCSID', 'number_of_rooms_14yrs')
+colnames(data19filtered) <- c('MCSID', 'CM_number','emotion_prob_17yrs','peer_prob_17ysr', 'hyperactivity_17yrs','conduct_prob_17yrs','WEMWBS_17yrs')
+colnames(data20filtered) <- c('MCSID','CM_number', 'cut_stabbed_17yrs','burned_17yrs','bruised_pinched_17yrs','overdose_17yrs','pulled_hair_17yrs','hurt_other_way_17yrs','end_life_17yrs')
+colnames(data21filtered) <- c('MCSID', 'step_sibling_7yrs')
+colnames(data22filtered) <- c('MCSID','CM_number','SDQ_3yrs')
+colnames(data23filtered) <- c('MCSID','CM_number','SDQ_5yrs')
+
+```
+
+We will now fix the MCSID variable so that it is the same length in each dataset. This is necessary for when we later merge datasets- fixing the MCSID variable to have the same length means that datasets can be merge by comparing the MCSIDs and CM_number (where applicable). This can only happen if the MCSIDs are the same length. Trial and error showed that the MCSIDs sometimes contain extra spaces, which prevents merging occurring correctly, this step corrects for that. 
+
+```{r}
+#Function that clamps strings (IDs and CM_Number)  so that only characters between 1-ll are included. This will allow for datasets to be merged by comparing the IDs and CM_Number (can only do this if they are the same length )
+clampID <- function(strrr, ll){
+  return(substring(strrr, first=1, last=ll))
+}
+#take the MCSID column and replace it with the clamped version 
+data1filtered$MCSID <- clampID(data1filtered$MCSID, 7)
+data2filtered$MCSID <- clampID(data2filtered$MCSID, 7)
+data3filtered$MCSID <- clampID(data3filtered$MCSID, 7)
+data4filtered$MCSID <- clampID(data4filtered$MCSID, 7)
+data5filtered$MCSID <- clampID(data5filtered$MCSID, 7)
+data6filtered$MCSID <- clampID(data6filtered$MCSID, 7)
+data7filtered$MCSID <- clampID(data7filtered$MCSID, 7)
+data8filtered$MCSID <- clampID(data8filtered$MCSID, 7)
+data9filtered$MCSID <- clampID(data9filtered$MCSID, 7)
+data10filtered$MCSID <- clampID(data10filtered$MCSID, 7)
+data11filtered$MCSID <- clampID(data11filtered$MCSID, 7)
+data12filtered$MCSID <- clampID(data12filtered$MCSID, 7)
+data13filtered$MCSID <- clampID(data13filtered$MCSID, 7)
+data14filtered$MCSID <- clampID(data14filtered$MCSID, 7)
+data15filtered$MCSID <- clampID(data15filtered$MCSID, 7)
+data16filtered$MCSID <- clampID(data16filtered$MCSID, 7)
+data17filtered$MCSID <- clampID(data17filtered$MCSID, 7)
+data18filtered$MCSID <- clampID(data18filtered$MCSID, 7)
+data19filtered$MCSID <- clampID(data19filtered$MCSID, 7)
+data20filtered$MCSID <- clampID(data20filtered$MCSID, 7)
+data21filtered$MCSID <- clampID(data21filtered$MCSID, 7)
+data22filtered$MCSID <- clampID(data22filtered$MCSID, 7)
+data23filtered$MCSID <- clampID(data23filtered$MCSID, 7)
+data24filtered$MCSID <- clampID(data24filtered$MCSID, 7)
+
+
+
+#Rewriting the CM_Number column (in datasets which contain it) from a string into an integer by first clamping the string to the first character (1 or 2) and then using the strtoi function to transform
+data1filtered$CM_number <- strtoi(clampID(data1filtered$CM_number, 1))
+data2filtered$CM_number <- strtoi(clampID(data2filtered$CM_number, 1))
+data3filtered$CM_number <- strtoi(clampID(data3filtered$CM_number, 1))
+data4filtered$CM_number <- strtoi(clampID(data4filtered$CM_number, 1))
+data5filtered$CM_number <- strtoi(clampID(data5filtered$CM_number, 1))
+data6filtered$CM_number <- strtoi(clampID(data6filtered$CM_number, 1))
+
+
+data9filtered$CM_number <- strtoi(clampID(data9filtered$CM_number, 1))
+data10filtered$CM_number <- strtoi(clampID(data10filtered$CM_number, 1))
+
+
+data14filtered$CM_number <- strtoi(clampID(data14filtered$CM_number, 1))
+data15filtered$CM_number <- strtoi(clampID(data15filtered$CM_number, 1))
+
+data17filtered$CM_number <- strtoi(clampID(data17filtered$CM_number, 1))
+
+data19filtered$CM_number <- strtoi(clampID(data19filtered$CM_number, 1))
+data20filtered$CM_number <- strtoi(clampID(data20filtered$CM_number, 1))
+
+data22filtered$CM_number <- strtoi(clampID(data22filtered$CM_number, 1))
+data23filtered$CM_number <- strtoi(clampID(data23filtered$CM_number, 1))
+```
+
+Now we can merge the individual datasets to create one dataset containing all the variables we need for our analyses:
+
+```{r}
+#Merging the individual datasets, based on MCSID (and CM_Number, where relevant) to create one working dataset
+
+merge1 <- full_join(data1filtered, data2filtered,by= c('MCSID','CM_number'))
+merge2<- full_join(merge1, data3filtered, by=c('MCSID','CM_number'))
+merge3<- full_join(merge2, data4filtered, by=c('MCSID','CM_number'))
+merge4<- full_join(merge3, data5filtered, by=c('MCSID','CM_number'))
+merge5<- full_join(merge4, data6filtered, by=c('MCSID','CM_number'))
+merge6<- full_join(merge5, data7filtered, by='MCSID')
+merge7<- full_join(merge6, data8filtered, by='MCSID')
+merge8<- full_join(merge7, data9filtered, by= c('MCSID','CM_number'))
+merge9<- full_join(merge8, data10filtered, by= c('MCSID','CM_number'))
+merge10<- full_join(merge9, data11filtered,by='MCSID')
+merge11<- full_join(merge10,data12filtered, by='MCSID')
+merge12<- full_join(merge11,data13filtered, by='MCSID')
+merge13<- full_join(merge12,data14filtered, by=c('MCSID','CM_number'))
+merge14<- full_join(merge13,data15filtered, by=c('MCSID','CM_number'))
+merge15<- full_join(merge14,data16filtered, by='MCSID')
+merge16<- full_join(merge15,data17filtered,  by=c('MCSID','CM_number'))
+merge17<- full_join(merge16,data18filtered,by='MCSID')
+merge18<- full_join(merge17,data19filtered, by=c('MCSID','CM_number'))
+merge19 <-full_join(merge18,data20filtered, by=c('MCSID','CM_number'))
+merge20<-full_join(merge19,data21filtered, by=c('MCSID'))
+merge21<-full_join(merge20,data22filtered, by=c('MCSID','CM_number'))
+merge22<-full_join(merge21,data23filtered, by=c('MCSID','CM_number'))
+merge23 <-full_join(merge22,data24filtered, by=c('MCSID'))
+```
+
+We will filter out for twins in our dataset by randomising which twin from a twin pair is excluded:
+```{r}
+#Selecting one twin at random from each twin pair to keep in the sample
+FilteredTwins_And_Singletons<- merge23%>% group_by(merge23$MCSID) %>% slice_sample(n = 1) 
+```
+
+We will also filter out those who do not have a sibling at both 11 years and 14 years:
+```{r}
+#transforming sibling victimisation variable to numeric so that 'no sibling'= 7
+#square bracket means only select these rows (if there is a comma at the end) and then use logical indexing to select cases where cohort child has a sibling at either 11 or 14, or at both timepoints
+
+Filtered_no_siblings <-FilteredTwins_And_Singletons[as.numeric(FilteredTwins_And_Singletons$sibling_victimisation_11yrs)!=7 | as.numeric(FilteredTwins_And_Singletons$sibling_victimisation_14yrs)!=7, ]
+```
+
+Finally, from the sample which has removed the second twin and those who do not have siblings at both timepoints, filtering out for those who have not provided a response to the sibling victimisation question sibling  at any time point (11 or 14 years)**
+
+```{r}
+#filtering for those who have not provided a response at either 11 and 14 
+filtered_final <- Filtered_no_siblings[!is.na(Filtered_no_siblings$sibling_victimisation_11yrs) | !is.na(Filtered_no_siblings$sibling_victimisation_14yrs),]
+```
+
+
+## **Data preparation**
+From our filtered final dataset, we will now derive variables we need for our analyses:
+
+```{r}
+##Creating sibing victimisation CATEGORIES for descriptives- categories= never, one timepoint and both timepoints
+
+#Recoding 7 (no siblings) as 0 (never) for the bullied_11 and bullied_14 variables
+filtered_final$recoded11vic <- filtered_final$sibling_victimisation_11yrs
+filtered_final$recoded11vic[as.numeric(filtered_final$recoded11vic)==7] <- "Never  "
+
+filtered_final$recoded14vic <- filtered_final$sibling_victimisation_14yrs
+filtered_final$recoded14vic[as.numeric(filtered_final$recoded14vic)==7] <- "Never  "
+
+#making variables for sib vic at 11 and 14 to enter into logical indexing
+bullied_11 <-as.numeric(filtered_final$recoded11vic) 
+bullied_14<-as.numeric(filtered_final$recoded14vic)
+
+
+#1. logical indexing to create a not bullied variable, has three conditions (not bullied at both timepoints, not bullied at 11 and missing at 14 and not bullied at 14 missing at 11)
+a <-bullied_11==3|bullied_11==4|bullied_11==5|bullied_11==6
+b <-bullied_14==3|bullied_14==4|bullied_14==5|bullied_14==6
+
+not_bullied<- ((a& b&!is.na(b)) |
+(a&is.na(b)) |
+(b&is.na(a)) |
+(b&a&!is.na(a))) &
+!(is.na(a) & is.na(b)) &
+  !(is.na(a) & !b)&
+  !(is.na(b) & !a);
+
+filtered_final$not_bullied <- not_bullied
+
+#2.logical indexing to create an either bullied at 11 or 14- bullied at one timepoint  variable
+#this category includes those bullied at 11 but not 14 or vice versa, or those with data at only one timepoint, but at this timepoint they are bullied [not bullied 11, bullied 14; NA at 11 and bullied 14; bullied 11 not-bullied 14 and bullied 11 NA 14]
+#Using definition of sibling bullying- selecting responses which correspond to a frequency of at least once a week
+x<- bullied_11==1|bullied_11==2
+y<- bullied_14==1|bullied_14==2
+
+bullied_one_timepoint <- ((x&!y&!is.na(y)) |
+(x&is.na(y)) |
+(y&is.na(x)) |
+(y&!x&!is.na(x))) &
+!(is.na(x) & is.na(y)) &
+  !(is.na(x) & !y)&
+  !(is.na(y) & !x);
+
+summary(bullied_one_timepoint)
+filtered_final$bullied_one_timepoint <- bullied_one_timepoint
+
+
+#3. Creating a bullied at both timepoints variable  
+bullied_both <- x & y
+
+summary(bullied_both)
+filtered_final$bullied_both<-bullied_both
+
+```
+
+```{r}
+#Sibling victimisation FREQUENCY variable (summing timepoints)- FOR REGRESSION
+
+#Firstly, reverse coding the two variables so that 'never' gives the lowest score (1) and 'most days' the highest score (6)- we will -1 from all scores at a later stage so that the scores range from 0-5
+
+REVERSE_victimisation_11 <-7-as.numeric(bullied_11)
+REVERSE_victimisation_14 <-7-as.numeric(bullied_14)
+
+filtered_final$REVERSE_victimisation_11 <-REVERSE_victimisation_11 
+
+filtered_final$REVERSE_victimisation_14 <-REVERSE_victimisation_14 
+
+# Taking away 1 from victimisation scores at each timepoint to create a scale from 1-5
+
+filtered_final$derived11vic <- filtered_final$REVERSE_victimisation_11-1
+
+filtered_final$derived14vic <- filtered_final$REVERSE_victimisation_14-1
+
+
+#Recoding NA as 0 only for the derived 11 vic and derived 14 vic variables
+
+filtered_final$derived11vic[is.na(filtered_final$derived11vic)] <- 0
+
+summary(filtered_final$derived11vic)
+
+filtered_final$derived14vic[is.na(filtered_final$derived14vic)] <- 0
+
+summary(filtered_final$derived14vic)
+
+
+#Summing the two timepoints
+
+Sum_victimisation <- filtered_final$derived11vic+filtered_final$derived14vic
+
+filtered_final$Sum_victimisation <-Sum_victimisation
+
+summary(filtered_final$Sum_victimisation)
+```
+
+```{r}
+#Outcomes at age 17
+
+#Internalising problems at age 17 (transforming from  factor to numeric)
+filtered_final$Internalising_derived_17yr <-as.numeric(filtered_final$peer_prob_17ysr) + as.numeric(filtered_final$emotion_prob_17yrs)-2 #subtracting two because as.numeric treats 0 as the first response, so each score is shifted +1 and you need to remove it
+
+
+#Externalising problems at age 17 (transforming from  factor to numeric)
+filtered_final$Externalising_derived_17yr <-as.numeric(filtered_final$conduct_prob_17yrs) + as.numeric(filtered_final$hyperactivity_17yrs)-2 #subtracting two because as.numeric treats 0 as the first response, so each score is shifted +1 and you need to remove it
+
+#Self-harmed age 17? (Y/N)
+#Logical indexing- creating a new binary variable- yes to self harm if CM has answered yes to any of the self harm questions, if they have answered no to all questions- no 
+deriving_self_harm_yes_or_no <- filtered_final$cut_stabbed_17yrs == 'Yes' | filtered_final$burned_17yrs=='Yes'| filtered_final$bruised_pinched_17yrs=='Yes' | filtered_final$overdose_17yrs=='Yes' | filtered_final$pulled_hair_17yrs=='Yes' | filtered_final$hurt_other_way_17yrs=='Yes' | filtered_final$end_life_17yrs=='Yes'
+
+filtered_final$Self_harm_17yrs<- deriving_self_harm_yes_or_no 
+```
+
+
+```{r}
+#Covariates 
+
+#Internalising problems at age 7 (transforming from  factor to numeric)
+filtered_final$Internalising_derived_7yr <-as.numeric(filtered_final$peer_prob_7yr) + as.numeric(filtered_final$emotion_prob_7yr) -2 #subtracting two because as.numeric treats 0 as the first response, so each score is shifted +1 and you need to remove it
+
+#Externalising problems at age 7 (transforming from  factor to numeric)
+filtered_final$Externalising_derived_7yr <-as.numeric(filtered_final$conduct_prob_7yr) + as.numeric(filtered_final$hyperactivity_7yr)-2
+
+
+#3Step-siblings age 7? (Y/N)
+deriving_stepsiblings_yes_or_no <- as.numeric(filtered_final$step_sibling_7yrs) == 1
+filtered_final$StepSiblings7yrs = deriving_stepsiblings_yes_or_no
+
+
+#Maternal education: measured as the mother’s highest academic qualification achieved by the end of our study period (age 7 years), coded as university degree or not
+deriving_university_edu_yes_or_no <- filtered_final$Maternal_education_3yr== 'Higher degree'|filtered_final$Maternal_education_3yr=='First degree'|filtered_final$Maternal_education_3yr=='Diplomas in higher education'
+
+filtered_final$university_education <-deriving_university_edu_yes_or_no 
+summary(filtered_final$university_education)
+  
+#Frequent alcohol use: [every day and 5-6 times per week (Yes) vs 3-4 per week/1-2 per week/ 1-2 per month/never (No)] 
+summary(filtered_final$parental_substance_7yrs)
+deriving_freq_alc_yes_no <-filtered_final$parental_substance_7yrs== 'Every day      ' |  filtered_final$parental_substance_7yrs=='5-6 times per week     '  #note extra spaces in response name here
+
+filtered_final$frequent_alcohol_use<-deriving_freq_alc_yes_no 
+summary(filtered_final$frequent_alcohol_use)
+
+```
+
+```{r}
+#For characteristics- Whether CM has older siblings? (Y/N) using if and else statements
+
+checkoldest <- function(sibl1, sibl2){
+  if(is.na(sibl1) || is.na(sibl2))
+  {
+    return("NA"); #if answered NA to either
+  }
+  else if(sibl2 > 0 && sibl1==0)
+  {
+    return("Yes"); #if no sibs at 9m but sibs at 11 yeats
+  }
+  else if(sibl1==0 && sibl2==0)
+  {
+    return("Only child"); #if an only child at both timepoints
+  }
+  else
+  {
+    return("No"); #otherwise- not the oldest 
+  }
+}
+
+filtered_final$CM_is_eldest_child <- mapply(checkoldest, 
+                                            as.numeric(filtered_final$number_of_sibling_s9m), 
+                                                 as.numeric(filtered_final$number_of_siblings_11yrs));
+```
+
+```{r}
+#Risk and promotive factors age 14
+
+#School engagement and motivation age 14
+#reverse coding for the variables where a higher score should equal more motivation (originally 1=Always means high motivation but a low score)
+
+#school_motivation_try_best_14yrs
+filtered_final$RECODEDschool_motivation_try_best_14yrs <- 5-as.numeric(filtered_final$school_motivation_try_best_14yrs)
+
+
+#school_motivation_interesting_14yrs
+filtered_final$RECODEDschool_motivation_interesting_14yrs <- 
+  5-as.numeric(filtered_final$school_motivation_interesting_14yrs)
+
+#sum
+filtered_final$SUM_school_motivation_14yrs <- filtered_final$RECODEDschool_motivation_try_best_14yrs +filtered_final$RECODEDschool_motivation_interesting_14yrs+ as.numeric(filtered_final$school_motivation_unhappy_14yrs)+as.numeric(filtered_final$school_motivation_tired_14yrs)+as.numeric(filtered_final$school_motivation_waste_of_time_14yrs)+ as.numeric(filtered_final$school_motivation_difficult_keep_mind_on_work_14yrs)
+
+
+#Parental monitoring age 14(sum)
+#Firstly, reverse code so that scores of 1=always now=4, so the higher the score the higher the monitoring
+filtered_final$RECODEDparental_monitoring_who_14yrs <- 5-as.numeric(filtered_final$parental_monitoring_who_14yrs)
+
+
+#Reversed_parental_monitoring_what_14yrs
+filtered_final$RECODEDparental_monitoring_what_14yrs <- 5-as.numeric(filtered_final$parental_monitoring_what_14yrs)
+
+#Reversed_parental_monitoring_where_14yrs
+filtered_final$RECODEDparental_monitoring_where_14yrs <- 5-as.numeric(filtered_final$parental_monitoring_where_14yrs)
+
+#Summing the three monitoring variables
+filtered_final$SUM_parental_monitoring_14yrs <- filtered_final$RECODEDparental_monitoring_who_14yrs +filtered_final$RECODEDparental_monitoring_what_14yrs +filtered_final$RECODEDparental_monitoring_where_14yrs
+
+
+#Overcrowding age 14? 
+filtered_final$Overcrowding_14yr <- (as.numeric(filtered_final$number_people_household_14yrs)+1) /as.numeric(filtered_final$number_of_rooms_14yrs) #adding one because when moving between factor and number, it subtracts one)
+
+
+#Parental relationship, reverse coding so that a higher score= a higher score means a higher quality relationship
+summary(filtered_final$parent_rel_talk_about_ortant_14yrs)
+filtered_final$recoded_parental_rel <-7-as.numeric(filtered_final$parent_rel_talk_about_ortant_14yrs)
+
+#Parental depression- transforming to a numeric variable
+filtered_final$parental_depression_7yrs <-as.numeric(filtered_final$parental_depression_7yrs)
+str(filtered_final$parental_depression_7yrs)
+```
+
+
+## **Descriptive statistics**
+
+Firstly, descriptives for Sibling Bullying Frequencies and Mental Health and Wellbeing Outcomes 
+```{r}
+#function to round to 2dp
+
+round1 <- function(percentage_mean) {
+  rounding<-sprintf("%.2f",percentage_mean)
+  return(rounding)
+}
+
+#1.OVERALL sample
+
+#Firstly, calculating the frequency of the three categories
+freq_not_bullied <-summary(filtered_final$not_bullied)
+
+freq_bullied_once<-summary(filtered_final$bullied_one_timepoint)
+
+freq_bullied_both<-summary(filtered_final$bullied_both)
+
+#Secondly, calculating the percentages for each category
+proportions_not_bullied <- table(filtered_final$not_bullied)/length(filtered_final$not_bullied)
+
+percentages_not_bullied<- proportions_not_bullied*100
+
+percentages_not_bullied<-round1(as.numeric(percentages_not_bullied))
+
+proportions_bullied_once<- table(filtered_final$bullied_one_timepoint)/length(filtered_final$bullied_one_timepoint)
+
+percentages_bullied_once<- proportions_bullied_once*100
+
+percentages_bullied_once<-round1(as.numeric(percentages_bullied_once))
+
+proportions_bullied_both<- table(filtered_final$bullied_both)/length(filtered_final$bullied_both)
+
+percentages_bullied_both<- proportions_bullied_both*100
+
+percentages_bullied_both<-round1(as.numeric(percentages_bullied_both))
+
+#2. Girls
+
+#preparing data so that responses are only for girls 
+filtered_finalGirls<-filter(filtered_final, CM_Sex == "Female")
+
+#removing NA from response for gender, so that only responses from girls remain
+filtered_finalGirls<-filtered_finalGirls[complete.cases(filtered_finalGirls$CM_Sex),]
+
+#checking
+summary(filtered_finalGirls$CM_Sex)
+
+#Next, calculating the frequency of the three categories FOR GIRLS
+freq_not_bulliedGirls <-summary(filtered_finalGirls$not_bullied)
+
+freq_bullied_onceGirls<-summary(filtered_finalGirls$bullied_one_timepoint)
+
+freq_bullied_bothGirls<-summary(filtered_finalGirls$bullied_both)
+
+#Secondly, calculating the percentages for each category
+proportions_not_bulliedGirls <- table(filtered_finalGirls$not_bullied)/length(filtered_finalGirls$not_bullied)
+
+percentages_not_bulliedGirls<- proportions_not_bulliedGirls*100
+
+percentages_not_bulliedGirls<-round1(as.numeric(percentages_not_bulliedGirls))
+
+proportions_bullied_onceGirls<- table(filtered_finalGirls$bullied_one_timepoint)/length(filtered_finalGirls$bullied_one_timepoint)
+
+percentages_bullied_onceGirls<- proportions_bullied_onceGirls*100
+
+percentages_bullied_onceGirls<-round1(as.numeric(percentages_bullied_onceGirls))
+
+proportions_bullied_bothGirls<- table(filtered_finalGirls$bullied_both)/length(filtered_finalGirls$bullied_both)
+
+percentages_bullied_bothGirls<- proportions_bullied_bothGirls*100
+
+percentages_bullied_bothGirls<-round1(as.numeric(percentages_bullied_bothGirls))
+
+
+#2. Boys
+
+#preparing data so that responses are only for boys
+filtered_finalBoys<- filter(filtered_final, CM_Sex == "Male")
+
+#removing NA from response for gender, so that only responses from boys remain
+filtered_finalBoys<-filtered_finalBoys[complete.cases(filtered_finalBoys$CM_Sex),]
+
+#checking
+summary(filtered_finalBoys$CM_Sex)
+
+#Next, calculating the frequency of the three categories FOR Boys
+freq_not_bulliedBoys <-summary(filtered_finalBoys$not_bullied)
+
+freq_bullied_onceBoys<-summary(filtered_finalBoys$bullied_one_timepoint)
+
+freq_bullied_bothBoys<-summary(filtered_finalBoys$bullied_both)
+
+#Secondly, calculating the percentages for each category
+proportions_not_bulliedBoys <- table(filtered_finalBoys$not_bullied)/length(filtered_finalBoys$not_bullied)
+
+percentages_not_bulliedBoys<- proportions_not_bulliedBoys*100
+
+percentages_not_bulliedBoys<-round1(as.numeric(percentages_not_bulliedBoys))
+
+proportions_bullied_onceBoys<- table(filtered_finalBoys$bullied_one_timepoint)/length(filtered_finalBoys$bullied_one_timepoint)
+
+percentages_bullied_onceBoys<- proportions_bullied_onceBoys*100
+
+percentages_bullied_onceBoys<-round1(as.numeric(percentages_bullied_onceBoys))
+
+proportions_bullied_bothBoys<- table(filtered_finalBoys$bullied_both)/length(filtered_finalBoys$bullied_both)
+
+percentages_bullied_bothBoys<- proportions_bullied_bothBoys*100
+
+percentages_bullied_bothBoys<-round1(as.numeric(percentages_bullied_bothBoys))
+
+
+#Outcomes, by sibling victimisation category
+
+#for whole sample
+#Internalising (M, SD)
+mean_internalising17_overall<- mean(as.numeric(filtered_final$Internalising_derived_17yr),na.rm = TRUE)
+SD_internalising17_overall <- sd(as.numeric(filtered_final$Internalising_derived_17yr),na.rm = TRUE)
+
+#Externalising (M,SD)
+mean_externalising17_overall<- mean(as.numeric(filtered_final$Externalising_derived_17yr),na.rm = TRUE)
+SD_externalising17_overall <- sd(as.numeric(filtered_final$Externalising_derived_17yr),na.rm = TRUE)
+
+#WEMWBS (M,SD)
+mean_WEMWBS17_overall<- mean(as.numeric(filtered_final$WEMWBS_17yrs),na.rm = TRUE)
+SD_WEMWBS17_overall <- sd(as.numeric(filtered_final$WEMWBS_17yrs),na.rm = TRUE)
+
+
+#Self-harm (%)
+table_overall_vic_SH <-table(filtered_final$Self_harm_17yrs)
+prop.table(table_overall_vic_SH)
+percentage_SH_overall <-prop.table(table_overall_vic_SH)*100
+  
+    
+#Girls
+#Internalising (M, SD)
+mean_internalising17_overallGIRLS<- mean(as.numeric(filtered_finalGIRLS$Internalising_derived_17yr),na.rm = TRUE)
+SD_internalising17_overallGIRLS <- sd(as.numeric(filtered_finalGIRLS$Internalising_derived_17yr),na.rm = TRUE)
+
+#Externalising (M,SD)
+mean_externalising17_overallGIRLS<- mean(as.numeric(filtered_finalGIRLS$Externalising_derived_17yr),na.rm = TRUE)
+SD_externalising17_overallGIRLS <- sd(as.numeric(filtered_finalGIRLS$Externalising_derived_17yr),na.rm = TRUE)
+
+#WEMWBS (M,SD)
+mean_WEMWBS17_overallGIRLS<- mean(as.numeric(filtered_finalGIRLS$WEMWBS_17yrs),na.rm = TRUE)
+SD_WEMWBS17_overallGIRLS <- sd(as.numeric(filtered_finalGIRLS$WEMWBS_17yrs),na.rm = TRUE)
+
+#Self-harm (%)
+table_overall_vic_SHGIRLS <-table(filtered_finalGIRLS$Self_harm_17yrs)
+prop.table(table_overall_vic_SHGIRLS)
+percentage_SH_overallGIRLS <-prop.table(table_overall_vic_SHGIRLS)*100
+
+
+#BOYS
+#Internalising (M, SD)
+mean_internalising17_overallBOYS<- mean(as.numeric(filtered_finalBOYS$Internalising_derived_17yr),na.rm = TRUE)
+SD_internalising17_overallBOYS <- sd(as.numeric(filtered_finalBOYS$Internalising_derived_17yr),na.rm = TRUE)
+
+#Externalising (M,SD)
+mean_externalising17_overallBOYS<- mean(as.numeric(filtered_finalBOYS$Externalising_derived_17yr),na.rm = TRUE)
+SD_externalising17_overallBOYS <- sd(as.numeric(filtered_finalBOYS$Externalising_derived_17yr),na.rm = TRUE)
+
+#WEMWBS (M,SD)
+mean_WEMWBS17_overallBOYS<- mean(as.numeric(filtered_finalBOYS$WEMWBS_17yrs),na.rm = TRUE)
+SD_WEMWBS17_overallBOYS <- sd(as.numeric(filtered_finalBOYS$WEMWBS_17yrs),na.rm = TRUE)
+
+#Self-harm (%)
+table_overall_vic_SHBOYS <-table(filtered_finalBOYS$Self_harm_17yrs)
+prop.table(table_overall_vic_SHBOYS)
+percentage_SH_overallBOYS <-prop.table(table_overall_vic_SHBOYS)*100
+
+```
+Descriptives for Sample characteristics
+```{r}
+#subsetting filtered_final for the three categories of victimisation
+never<- subset(filtered_final,not_bullied=="TRUE")
+one<-subset(filtered_final, bullied_one_timepoint=="TRUE")
+both<-subset(filtered_final, bullied_both=="TRUE")
+
+#For ANOVAs, making a 'victimisation type' variable- where 0=never, 1= once, 2= twice
+filtered_final$victimisation_categories[filtered_final$not_bullied]<-0
+filtered_final$victimisation_categories[filtered_final$bullied_one_timepoint]<-1
+filtered_final$victimisation_categories[filtered_final$bullied_both]<-2
+
+#Calculating percentages or mean for each variables
+#CM Sex (%)
+  #Never
+    table_never_vic_Sex <-table(never$CM_Sex)
+    prop_male_never <- prop.table(table_never_vic_Sex)
+    percentage_male_never <- prop_male_never*100
+    percentage_male_never <-round1(as.numeric(percentage_male_never))
+   
+
+  #One timepoint
+    table_one_vic_Sex <-table(one$CM_Sex)
+    prop_male_once <-prop.table(table_one_vic_Sex)
+    percentage_male_once <-prop_male_once*100
+    percentage_male_once <- round1(as.numeric(percentage_male_once))
+    
+  #Both
+    table_both_vic_Sex <-table(both$CM_Sex)
+    prop_male_both <-prop.table(table_both_vic_Sex)
+    percentage_male_both <- prop_male_both*100
+    percentage_male_both<-round1(as.numeric(percentage_male_both))
+    
+ #P-values
+    combined_vic_sex <- cbind(table_never_vic_Sex,table_one_vic_Sex,table_both_vic_Sex )
+    chisq_sex<- chisq.test(combined_vic_sex)
+    chisq_sex
+    
+#CM Ethnicity (%)
+ #Never
+    table_never_vic_Ethnicity <-table(never$CM_Ethnicity)
+    prop_white_never <-prop.table(table_never_vic_Ethnicity)
+    percentage_white_never <-prop_white_never*100
+    percentage_white_never <-round1(as.numeric(percentage_white_never))
+
+  #One timepoint
+    table_one_vic_Ethnicity <-table(one$CM_Ethnicity)
+    prop_white_once <- prop.table(table_one_vic_Ethnicity)
+    percentage_white_once <- prop_white_once*100
+    percentage_white_once <-round1(as.numeric(percentage_white_once))
+    
+  #Both
+    table_both_vic_Ethnicity <-table(both$CM_Ethnicity)
+    prop_white_both <- prop.table(table_both_vic_Ethnicity)
+    percentage_white_both <- prop_white_both*100
+    percentage_white_both <-round1(as.numeric(percentage_white_both))
+
+  #P-values
+    combined_vic_ethnicity <- cbind( table_never_vic_Ethnicity, table_one_vic_Ethnicity,table_both_vic_Ethnicity)
+    chisq_ethnicity<- chisq.test(combined_vic_ethnicity)
+    chisq_ethnicity
+
+#Number of siblings living at home (%)
+  #Never
+    table_never_vic_siblings <-table(never$number_of_siblings_11yrs)
+    prop_sib_never <- prop.table(table_never_vic_siblings)
+    percentage_sib_never <- prop_sib_never*100
+    percentage_sib_never <-round1(as.numeric(percentage_sib_never))
+
+  #One timepoint
+    table_one_vic_siblings <-table(one$number_of_siblings_11yrs)
+    prop_sib_once <- prop.table(table_one_vic_siblings)
+    percentage_sib_once <- prop_sib_once*100
+    percentage_sib_once <-round1(as.numeric(percentage_sib_once))
+    
+  #Both
+    table_both_vic_siblings <-table(both$number_of_siblings_11yrs)
+    prop_sib_both <-prop.table(table_both_vic_siblings)
+    percentage_sib_both <- prop_sib_both*100
+    percentage_sib_both <-round1(as.numeric(percentage_sib_both))
+    
+    #P-values
+    combined_vic_sibs<- cbind( table_never_vic_siblings, table_one_vic_siblings, ... = table_both_vic_siblings)
+    chisq_sibs<- chisq.test(combined_vic_sibs)
+    chisq_sibs
+
+#CM is eldest child (%)
+   #Never
+    table_never_vic_eldest <-table(never$CM_is_eldest_child)
+    prop_eldest_never <-prop.table(table_never_vic_eldest)
+    percentage_eldest_never <-prop_eldest_never*100
+    percentage_eldest_never <-round1(as.numeric(percentage_eldest_never))
+
+  #One timepoint
+    table_one_vic_eldest <-table(one$CM_is_eldest_child)
+    prop_eldest_once<- prop.table(table_one_vic_eldest)
+    percentage_eldest_once <- prop_eldest_once*100
+    percentage_eldest_once <-round1(as.numeric(percentage_eldest_once))
+    
+  #Both
+    table_both_vic_eldest <-table(both$CM_is_eldest_child)
+    prop_eldest_both <-prop.table(table_both_vic_eldest)
+    percentage_eldest_both <-prop_eldest_both*100
+    percentage_eldest_both <-round1(as.numeric(percentage_eldest_both))
+
+  #P-values
+    combined_vic_eldest<- cbind(table_never_vic_eldest, table_one_vic_eldest, table_both_vic_eldest)
+    chisq_eldest<- chisq.test(combined_vic_eldest)
+    chisq_eldest
+```
+
+Descriptives for covariates
+```{r}
+#function to display P values as .001 if less than .001, otherwise print P value as is    
+prettyp <- function(pvalueasdasd) {
+  if (pvalueasdasd < 0.001){
+    return("<.001")
+  } else {
+    return(pvalueasdasd)
+  }
+}
+
+#CM Sex (%) using info from table 2a
+    chisq_sex
+    
+#Step-sibling (%)
+#Never
+    table_never_vic_stepsibling <-table(never$step_sibling_7yrs)
+    prop.table(table_never_vic_stepsibling)
+    percentage_step_sibling_never <- prop.table(table_never_vic_stepsibling)*100
+    percentage_step_sibling_never<-round1(as.numeric(percentage_step_sibling_never))
+    
+  #One timepoint
+    table_one_vic_stepsibling <-table(one$step_sibling_7yrs)
+    prop.table(table_one_vic_stepsibling)
+    percentage_step_sibling_once <- prop.table(table_one_vic_stepsibling)*100
+    percentage_step_sibling_once<-round1(as.numeric(percentage_step_sibling_once))
+    
+  #Both
+    table_both_vic_stepsibling <-table(both$step_sibling_7yrs)
+    prop.table(table_both_vic_stepsibling)
+    percentage_step_sibling_both <- prop.table(table_both_vic_stepsibling)*100
+    percentage_step_sibling_both<-round1(as.numeric(percentage_step_sibling_both))
+
+  #P-values
+    combined_vic_step <- cbind(table_never_vic_stepsibling,table_one_vic_stepsibling,table_both_vic_stepsibling)
+    row_to_keep = c(FALSE, TRUE, TRUE)
+    filtered_combined_vic_step  = combined_vic_step[row_to_keep,]
+  
+    chisq_step<- chisq.test(filtered_combined_vic_step)
+    chisq_step
+    P_value_Step<-round(prettyp(as.numeric(chisq_step[3])),3) #round1ing the P value to 2DP
+
+#Maternal education- the mother’s highest academic qualification, coded as university degree or not #NOT INCLUDED IN COVARIATES DUE TO HIGH LEVEL OF MISSINGNESS
+  #Never
+    table_never_vic_maternaledu <-table(never$university_education)
+    prop.table(table_never_vic_maternaledu )
+    percentage_maternal_education_never <- prop.table(table_never_vic_maternaledu)*100
+    percentage_maternal_education_never <-round1(as.numeric(percentage_maternal_education_never))
+
+  #One timepoint
+    table_one_vic_maternaledu  <-table(one$university_education)
+    prop.table(table_one_vic_maternaledu)
+    percentage_maternal_education_once <- prop.table(table_one_vic_maternaledu)*100
+    percentage_maternal_education_once <-round1(as.numeric(percentage_maternal_education_once))
+    
+  #Both
+    table_both_vic_maternaledu <-table(both$university_education)
+    prop.table(table_both_vic_maternaledu)
+    percentage_maternal_education_both <- prop.table(table_both_vic_maternaledu)*100
+    percentage_maternal_education_both <-round1(as.numeric(percentage_maternal_education_both))
+
+  #P-values
+    combined_vic_edu <- cbind( table_never_vic_maternaledu,table_one_vic_maternaledu, table_both_vic_maternaledu)
+    chisq_edu<- chisq.test(combined_vic_edu)
+    chisq_edu
+    P_value_edu<-round(prettyp(as.numeric(chisq_edu[3])),3)#round1ing the P value to 2DP
+
+
+#Maternal depression (M,SD)
+  #Never
+     mean_maternal_depression_never<- mean(as.numeric(never$parental_depression_7yrs),na.rm = TRUE)
+     mean_maternal_depression_never <- round1(mean_maternal_depression_never)
+     SD_maternal_depression_never<- sd(as.numeric(never$parental_depression_7yrs),na.rm = TRUE)
+     SD_maternal_depression_never <- round1(SD_maternal_depression_never)
+
+  #Once
+     mean_maternal_depression_once<- mean(as.numeric(one$parental_depression_7yrs),na.rm = TRUE)
+     mean_maternal_depression_once <- round1(mean_maternal_depression_once)
+     SD_maternal_depression_once<-sd(as.numeric(one$parental_depression_7yrs),na.rm = TRUE)
+     SD_maternal_depression_once <- round1(SD_maternal_depression_once)
+    
+  #Both
+      mean_maternal_depression_both<-mean(as.numeric(both$parental_depression_7yrs),na.rm = TRUE)
+      mean_maternal_depression_both <- round1(mean_maternal_depression_both)
+      SD_maternal_depression_both <-sd(as.numeric(both$parental_depression_7yrs),na.rm = TRUE)
+      SD_maternal_depression_both <- round1(SD_maternal_depression_both)
+    
+  #P values
+    #converting parental depression variable from factor to numeric, to enter the anova
+    filtered_final$converted_parental_depression<-as.numeric(as.character(filtered_final$parental_depression_7yrs))  
+
+    #anova
+    anova_parental_depression <- aov(converted_parental_depression ~ victimisation_categories, data = filtered_final)
+    summary(anova_parental_depression)
+    P_value_MaternalDepression<-unlist(summary(anova_parental_depression)) #unlisting so can access P values to autofill table
+        
+  
+
+#Domestic violence (%)
+ #Never
+    table_never_vic_DV <-table(never$parental_domestic_violence_7years)
+    prop.table(table_never_vic_DV)
+    percentage_DV_never <- prop.table(table_never_vic_DV)*100
+    percentage_DV_never <-round1(as.numeric(percentage_DV_never))
+
+  #One timepoint
+    table_one_vic_DV  <-table(one$parental_domestic_violence_7years)
+    prop.table(table_one_vic_DV)
+    percentage_DV_once <- prop.table(table_one_vic_DV)*100
+    percentage_DV_once <-round1(as.numeric(percentage_DV_once))
+    
+  #Both
+    table_both_vic_DV <-table(both$parental_domestic_violence_7years)
+    prop.table(table_both_vic_DV)
+    percentage_DV_both <- prop.table(table_both_vic_DV)*100
+    percentage_DV_both <-round1(as.numeric(percentage_DV_both))
+
+    
+    #P-values
+    combined_vic_DV <- cbind(table_never_vic_DV,table_one_vic_DV,table_both_vic_DV)
+    chisq_DV<- chisq.test(combined_vic_DV)
+    chisq_DV
+    P_value_DV<-round(prettyp(as.numeric(chisq_DV[3])),3) #round1ing the P value to 2DP
+
+#Mean internalising symptoms age 7 (M,SD)
+    #Never
+    mean_internalising7_never <-mean(as.numeric(never$Internalising_derived_7yr),na.rm = TRUE)
+    mean_internalising7_never <- round1(mean_internalising7_never)
+    SD_internalising7_never <-sd(as.numeric(never$Internalising_derived_7yr),na.rm = TRUE)
+    SD_internalising7_never <- round1(SD_internalising7_never)
+  
+
+    #Once
+     mean_internalising7_once <- mean(as.numeric(one$Internalising_derived_7yr),na.rm = TRUE)
+     mean_internalising7_once <- round1(mean_internalising7_once)
+     SD_internalising7_once <-sd(as.numeric(one$Internalising_derived_7yr),na.rm = TRUE)
+     SD_internalising7_once <- round1(SD_internalising7_once)
+    
+    
+  #Both
+    mean_internalising7_both <-mean(as.numeric(both$Internalising_derived_7yr),na.rm = TRUE)
+    mean_internalising7_both <- round1(mean_internalising7_both)
+    SD_internalising7_both <-sd(as.numeric(both$Internalising_derived_7yr),na.rm = TRUE)
+    SD_internalising7_both <- round1(SD_internalising7_both)
+  
+
+    #anova
+    anova_internalising_7 <- aov(Internalising_derived_7yr ~ victimisation_categories, data = filtered_final)
+    summary(anova_internalising_7)
+    P_value_Internalising7<-unlist(summary(anova_internalising_7)) #unlisting so can access P values to autofill table
+    P_value_Internalising7<-round(prettyp(as.numeric(P_value_Internalising7[9])),3)
+   
+#Mean externalising symptoms age 7 (M,SD)
+  #Never
+    mean_externalising7_never<- mean(as.numeric(never$Externalising_derived_7yr),na.rm = TRUE)
+    mean_externalising7_never <- round1(mean_externalising7_never)
+    SD_externalising7_never<-sd(as.numeric(never$Externalising_derived_7yr),na.rm = TRUE)
+    SD_externalising7_never <- round1(SD_externalising7_never)
+    
+  #Once
+    mean_externalising7_once<- mean(as.numeric(one$Externalising_derived_7yr),na.rm = TRUE)
+    mean_externalising7_once <- round1(mean_externalising7_once)
+    SD_externalising7_once<- sd(as.numeric(one$Externalising_derived_7yr),na.rm = TRUE)
+    SD_externalising7_once <- round1(SD_externalising7_once)
+    
+  #Both
+   mean_externalising7_both<- mean(as.numeric(both$Externalising_derived_7yr),na.rm = TRUE)
+   mean_externalising7_both <- round1( mean_externalising7_both)
+   SD_externalising7_both<- sd(as.numeric(both$Externalising_derived_7yr),na.rm = TRUE)
+   SD_externalising7_both <- round1(SD_externalising7_both)
+    
+    #anova
+    anova_externalising_7 <- aov(Externalising_derived_7yr ~ victimisation_categories, data = filtered_final)
+    summary(anova_externalising_7)
+    
+    P_value_Externalising7<-unlist(summary(anova_externalising_7)) #unlisting so can access P values to autofill table
+    P_value_Externalising7<-round(prettyp(as.numeric(P_value_Externalising7[9])),3)
+    
+
+#ASD diagnosis age 7 (%diagnosed with ASD)
+  #Never
+    table_never_vic_ASD <-table(never$ASD_diagnosis_7yrs)
+    prop.table(table_never_vic_ASD)
+    percentage_ASD_never <- prop.table(table_never_vic_ASD)*100
+    percentage_ASD_never <-round1( as.numeric(percentage_ASD_never))
+
+  #One timepoint
+    table_one_vic_ASD  <-table(one$ASD_diagnosis_7yrs)
+    prop.table(table_one_vic_ASD)
+    percentage_ASD_once <- prop.table(table_one_vic_ASD)*100
+    percentage_ASD_once <-round1(as.numeric(percentage_ASD_once))
+    
+  #Both
+    table_both_vic_ASD <-table(both$ASD_diagnosis_7yrs)
+    prop.table(table_both_vic_ASD)
+    percentage_ASD_both <- prop.table(table_both_vic_ASD)*100
+    percentage_ASD_both <-round1( as.numeric(percentage_ASD_both))
+
+
+   #P-values
+    combined_vic_ASD <- cbind(table_never_vic_ASD,table_one_vic_ASD, table_both_vic_ASD)
+    chisq_ASD<- chisq.test( combined_vic_ASD )
+    chisq_ASD 
+    
+    P_value_ASD<-round(prettyp(as.numeric(chisq_ASD[3])),3) #round1ing the P value to 2DP
+    
+#Maternal occupation age 3 (keep all seven categories)
+ #Never
+    table_never_vic_occ <-table(never$Maternal_occupation_3yr)
+    prop.table(table_never_vic_occ)
+    percentage_maternal_occ_never <- prop.table(table_never_vic_occ)*100
+    percentage_maternal_occ_never <-round1( as.numeric(percentage_maternal_occ_never))
+
+  #One timepoint
+    table_one_vic_occ  <-table(one$Maternal_occupation_3yr)
+    prop.table(table_one_vic_occ)
+    percentage_maternal_occ_once <- prop.table(table_one_vic_occ)*100
+    percentage_maternal_occ_once <-round1( as.numeric(percentage_maternal_occ_once))
+    
+  #Both
+    table_both_vic_occ <-table(both$Maternal_occupation_3yr)
+    prop.table(table_both_vic_occ)
+    percentage_maternal_occ_both <- prop.table(table_both_vic_occ)*100
+    percentage_maternal_occ_both <-round1(as.numeric(percentage_maternal_occ_both))
+    
+    #P-values
+    combined_vic_occup <- cbind(table_never_vic_occ,table_one_vic_occ,table_both_vic_occ)
+    chisq_occup<- chisq.test( combined_vic_occup)
+    chisq_occup <- round(prettyp(as.numeric(  chisq_occup[3])),3)
+  
+    
+#Household income age 3 (keep all)
+ #Never
+    table_never_vic_income <-table(never$household_income_3yr)
+    prop.table(table_never_vic_income)
+    percentage_householdincome_never <- prop.table(table_never_vic_income)*100
+    percentage_householdincome_never <-round1(as.numeric(percentage_householdincome_never))
+
+  #One timepoint
+    table_one_vic_income  <-table(one$household_income_3yr)
+    prop.table(table_one_vic_income)
+    percentage_householdincome_once <- prop.table(table_one_vic_income)*100
+    percentage_householdincome_once <-round1( as.numeric(percentage_householdincome_once))
+    
+  #Both
+    table_both_vic_income <-table(both$household_income_3yr)
+    prop.table(table_both_vic_income)
+    percentage_householdincome_both <- prop.table(table_both_vic_income)*100
+    percentage_householdincome_both <-round1( as.numeric(percentage_householdincome_both))
+    
+    #P-values
+    combined_vic_income <- cbind(table_never_vic_income,table_one_vic_income,table_both_vic_income)
+    chisq_income<- chisq.test(combined_vic_income)
+    chisq_income<- round(prettyp(as.numeric(chisq_income[3])),3)
+
+# Frequent Alcohol use of parent age 7 (Dichotomised as ‘frequent parental alcohol use’:every day and 5-6 times per week (Yes) vs 3-4 per week/1-2 per week/ 1-2 per month/never (No)] 
+  
+  #Never
+    table_never_vic_alcohol <-table(never$frequent_alcohol_use)
+    prop.table(table_never_vic_alcohol)
+    percentage_alcohol_never <- prop.table(table_never_vic_alcohol)*100
+    percentage_alcohol_never <-round1( as.numeric(percentage_alcohol_never))
+
+  #One timepoint
+    table_one_vic_alcohol  <-table(one$frequent_alcohol_use)
+    prop.table(table_one_vic_alcohol)
+    percentage_alcohol_once <- prop.table(table_one_vic_alcohol)*100
+    percentage_alcohol_once <-round1(as.numeric(percentage_alcohol_once))
+    
+  #Both
+    table_both_vic_alcohol <-table(both$frequent_alcohol_use)
+    prop.table(table_both_vic_alcohol)
+    percentage_alcohol_both <- prop.table(table_both_vic_alcohol)*100
+    percentage_alcohol_both <-round1(as.numeric(percentage_alcohol_both))
+    
+  #P-values
+    combined_vic_alcohol <- cbind(table_never_vic_alcohol,table_one_vic_alcohol,table_both_vic_alcohol )
+    chisq_alcohol<- chisq.test(combined_vic_alcohol)
+    chisq_alcohol<- round(prettyp(as.numeric(chisq_alcohol[3])),3)
+ 
+    
+#Peer victimisation age 7 (%)
+  #Never
+    table_never_vic_peerprob <-table(never$peer_problems_picked_on_bullied_parent_7yrs)
+    prop.table(table_never_vic_peerprob )
+    percentage_vic_never <- prop.table(table_never_vic_peerprob)*100
+    percentage_vic_never <-round1( as.numeric(percentage_vic_never))
+
+  #One timepoint
+    table_one_vic_peerprob   <-table(one$peer_problems_picked_on_bullied_parent_7yrs)
+    prop.table(table_one_vic_peerprob )
+    percentage_vic_once <- prop.table(table_one_vic_peerprob)*100
+    percentage_vic_once <-round1( as.numeric(percentage_vic_once))
+    
+  #Both
+    table_both_vic_peerprob  <-table(both$peer_problems_picked_on_bullied_parent_7yrs)
+    prop.table(table_both_vic_peerprob )
+    percentage_vic_both <- prop.table(table_both_vic_peerprob)*100
+    percentage_vic_both <-round1(as.numeric(percentage_vic_both))
+    
+   #P-value
+    combined_vic_peer_vic <- cbind(table_never_vic_peerprob,table_one_vic_peerprob,table_both_vic_peerprob)
+    chisq_peer_vic<- chisq.test(combined_vic_peer_vic)
+    chisq_peer_vic<-round(prettyp(as.numeric(chisq_peer_vic[3])),3)
+    
+#Number of  siblings (age 11) (M,SD)
+  #Never
+    mean_number_of_siblings_11yrs_never<- mean(as.numeric(never$number_of_siblings_11yrs),na.rm = TRUE)
+    mean_number_of_siblings_11yrs_never <-  round1(mean_number_of_siblings_11yrs_never)
+    SD_number_of_siblings_11yrs_never<-sd(as.numeric(never$number_of_siblings_11yrs),na.rm = TRUE)
+    SD_number_of_siblings_11yrs_never <-  round1(SD_number_of_siblings_11yrs_never )
+    
+  #Once
+    mean_number_of_siblings_11yrs_once<- mean(as.numeric(one$number_of_siblings_11yrs),na.rm = TRUE)
+    mean_number_of_siblings_11yrs_once <-  round1(mean_number_of_siblings_11yrs_once)
+    SD_number_of_siblings_11yrs_once<- sd(as.numeric(one$number_of_siblings_11yrs),na.rm = TRUE)
+    SD_number_of_siblings_11yrs_once <- round1(SD_number_of_siblings_11yrs_once)
+    
+  #Both
+   mean_number_of_siblings_11yrs_both<- mean(as.numeric(both$number_of_siblings_11yrs),na.rm = TRUE)
+   mean_number_of_siblings_11yrs_both <- round1(mean_number_of_siblings_11yrs_both)
+   SD_number_of_siblings_11yrs_both<- sd(as.numeric(both$number_of_siblings_11yrs),na.rm = TRUE)
+   SD_number_of_siblings_11yrs_both <- round1(SD_number_of_siblings_11yrs_both)
+    
+  #anova
+    anova_number_of_siblings_11yrs <- aov(as.numeric(number_of_siblings_11yrs) ~ victimisation_categories, data = filtered_final)
+    summary(anova_number_of_siblings_11yrs)
+    
+    P_value_number_of_siblings_11yrs<-unlist(summary(anova_number_of_siblings_11yrs)) #unlisting so can access P values to autofill table
+    print(as.numeric(P_value_number_of_siblings_11yrs[9]))
+```
+
+## **1. Univariate analyses- the association between sibling victimisation and later mental health and wellbeing, using complete case data**
+
+Firstly, we will check for an interaction between gender and sibling victimisation. If the interaction is significant at p <.05, then we need to stratify that outcome by gender in any further analyses.
+
+```{r}
+#checking interaction between gender and sibling victimisation
+
+#Internalising 
+InternalisingGender<-lm(scale(Internalising_derived_17yr)~scale(Sum_victimisation)+PTTYPE2+CM_Sex*scale(Sum_victimisation),data=filtered_final)
+summary(InternalisingGender)
+
+#Externalising
+ExternalisingGender<-lm(scale(Externalising_derived_17yr)~scale(Sum_victimisation)+PTTYPE2+CM_Sex*scale(Sum_victimisation),data=filtered_final)
+summary(ExternalisingGender) #This is significant, so all analyses from now on for externalising symptoms will stratify by gender
+
+#Wellbeing
+filtered_final$transformedWEMWBS<-as.numeric(filtered_final$WEMWBS_17yrs) #transform to numeric
+WellbeingGender<-lm(scale(transformedWEMWBS) ~scale(Sum_victimisation)+PTTYPE2+CM_Sex*scale(Sum_victimisation),data=filtered_final)
+summary(WellbeingGender)
+
+#Self-harm
+SelfHarmGender <-lm(Self_harm_17yrs~scale(Sum_victimisation)+PTTYPE2+CM_Sex*scale(Sum_victimisation), data=filtered_final)
+summary(SelfHarmGender)
+```
+
+
+**Now, we will run unadjusted univariate linear regressions for each mental health and wellbeing outcome:** The output from this is in the supplementary section. 
+```{r}
+#1. Predicting internalising symptoms at 17 as a function of sibling victimisation frequency running univariate linear regression model
+
+#linear model- scaling to get standardised beta coefficients
+InternalisingLM_W <-lm(scale(Internalising_derived_17yr)~scale(Sum_victimisation)+PTTYPE2,data=filtered_final)
+
+#confidence intervals
+InternalisingCI_W <-confint(InternalisingLM_W)
+
+#model summary
+summary(InternalisingLM_W)
+```
+
+```{r}
+#2. Predicting externalising symptoms at 17 as a function of sibling victimisation frequency running univariate linear regression model, separating out by gender 
+
+#Creating a dataset each just for girls and then just for boys, to use in regressions
+#girls
+filtered_finalGIRLS <-filter(filtered_final, CM_Sex == "Female")
+
+filtered_finalGIRLS <-filtered_finalGIRLS[complete.cases(filtered_finalGIRLS$CM_Sex),]
+summary(filtered_finalGIRLS)
+
+#boys
+filtered_finalBOYS <-filter(filtered_final, CM_Sex == "Male")
+
+filtered_finalBOYS <-filtered_finalBOYS[complete.cases(filtered_finalBOYS$CM_Sex),]
+summary(filtered_finalBOYS)
+
+#Analyses for GIRLS
+ExternalisingLM_W_GIRLS <-lm(scale(Externalising_derived_17yr)~scale(Sum_victimisation)+PTTYPE2,data=filtered_finalGIRLS)
+#confidence intervals
+ExternalisingCI_W_GIRLS<-confint(ExternalisingLM_W_GIRLS)
+summary(ExternalisingLM_W_GIRLS)
+
+#Analyses for BOYS
+ExternalisingLM_W_BOYS <-lm(scale(Externalising_derived_17yr)~scale(Sum_victimisation)+PTTYPE2,data=filtered_finalBOYS)
+#confidence intervals
+ExternalisingCI_W_BOYS<-confint(ExternalisingLM_W_BOYS)
+summary(ExternalisingLM_W_BOYS)
+```
+
+```{r}
+#3. Predicting wellbeing at 17 as a function of sibling victimisation frequency running univariate linear regression model
+#transforming to numeric
+filtered_final$transformedWEMWBS<-as.numeric(filtered_final$WEMWBS_17yrs)
+#linear model
+WellbeingLM_W <-lm(scale(transformedWEMWBS) ~scale(Sum_victimisation)+PTTYPE2,data=filtered_final)
+#confidence intervals
+WellbeingCI_W <-confint(WellbeingLM_W)
+summary(WellbeingLM_W)
+```
+
+```{r}
+#4. Self-harm- note the analyses below are slightly different, as this is a categorical variable, therefore we want to extract odds ratios, rather than beta values
+
+#Probing the contrasts
+contrasts(filtered_final$Self_harm_17yrs)
+#removing NA as a category, so that can enter linear model
+sum(is.na(filtered_final$Self_harm_17yrs))
+
+#Create a new data set with missing entries removed
+Self_harm_noNA <- filtered_final %>% select(Sum_victimisation,Self_harm_17yrs,PTTYPE2) %>% na.omit()
+
+#linear model
+SelfHarmLM_W <-lm(Self_harm_17yrs~scale(Sum_victimisation)+PTTYPE2, data=Self_harm_noNA)
+summary(SelfHarmLM_W)
+
+#extracting odds ratio
+OR_SH_W <- exp(SelfHarmLM_W$coefficients)
+#confidence intervals
+SHCI_W <-exp(confint(SelfHarmLM_W))
+```
+
+**Now we will adjust for covariates- this will involve re-running the univariate models above, this time adding in covariates:** The output from this is in the supplementary section. 
+```{r}
+#1. Predicting internalising symptoms at 17 as a function of sibling victimisation frequency controlling for covariates
+InternalisingLMCOVARIATES_W<-lm(scale(Internalising_derived_17yr)~scale(Sum_victimisation)+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+ scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= filtered_final)
+
+summary(InternalisingLMCOVARIATES_W)
+
+#confidence intervals
+InternalisingCI_COV_W <-confint(InternalisingLMCOVARIATES_W)
+```
+
+```{r}
+#2. Predicting externalising symptoms at 17 as a function of sibling victimisation frequency controlling for covariates
+
+#GIRLS
+ExternalisingLMCOVARIATES_W_GIRLS <-lm(scale(Externalising_derived_17yr)~scale(Sum_victimisation) + PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= filtered_finalGIRLS)
+
+summary(ExternalisingLMCOVARIATES_W_GIRLS)
+#confidence intervals
+ExternalisingCI_COV_W_GIRLS<-confint(ExternalisingLMCOVARIATES_W_GIRLS)
+
+#BOYS
+ExternalisingLMCOVARIATES_W_BOYS <-lm(scale(Externalising_derived_17yr)~scale(Sum_victimisation) + PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= filtered_finalBOYS)
+
+summary(ExternalisingLMCOVARIATES_W_BOYS)
+#confidence intervals
+ExternalisingCI_COV_W_BOYS<-confint(ExternalisingLMCOVARIATES_W_BOYS)
+```
+
+```{r}
+#3. Wellbeing with covariates
+#linear regression (scaling continous variables)
+WBLMCOVARIATES_W <-lm(scale(transformedWEMWBS)~scale(Sum_victimisation) + PTTYPE2 + CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= filtered_final)
+
+summary(WBLMCOVARIATES_W)
+#confidence intervals
+WB_COV_CI_W <-confint(WBLMCOVARIATES_W)
+```
+
+```{r}
+#4. Self-harm with covariates
+SHLMCOVARIATES_W <-lm(Self_harm_17yrs~scale(Sum_victimisation) + PTTYPE2 + CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= testdata)
+
+summary(SHLMCOVARIATES_W)
+
+#odds ratio
+OR_SH_COV_W <-exp(SHLMCOVARIATES_W$coefficients)
+
+#confidence intervals
+CI_SH_COV_W <- exp(confint(SHLMCOVARIATES_W))
+```
+
+#Now we will apply Bonferroni corrections, to correct for multiple testing. They do not change the significance levels
+```{r}
+
+#Unadjusted models
+
+#First, extract the p values for sibling victimisation from each model
+
+#Internalising
+Int_unadj_p<-summary(InternalisingLM_W )$coefficients[2,4]  
+
+#Externalising girls
+ExtG_unadj_p<-summary(ExternalisingLM_W_GIRLS)$coefficients[2,4]  
+
+
+#Externalising boys
+ExtB_unadj_p <-summary(ExternalisingLM_W_BOYS)$coefficients[2,4] 
+
+#Wellbeing
+WB_unadj_p<-summary(WellbeingLM_W)$coefficients[2,4] 
+
+#self-harm
+SH_unadj_p<-summary(SelfHarmLM_W)$coefficients[2,4] 
+
+#combinging p values from all models into one object
+pvaluesUnadj<- (c(Int_unadj_p, ExtG_unadj_p, ExtB_unadj_p, WB_unadj_p,SH_unadj_p))
+
+#running bonferroni corrections
+p.adjust(pvaluesUnadj,method="bonferroni")
+
+
+#Now repeating with adjusted models
+
+#Extracting P values
+Int_adj_p<-summary(InternalisingLMCOVARIATES_W)$coefficients[2,4] 
+ExtG_adj_p<-summary(ExternalisingLMCOVARIATES_W_GIRLS)$coefficients[2,4] 
+ExtB_adj_p<-summary(ExternalisingLMCOVARIATES_W_BOYS)$coefficients[2,4] 
+WB_adj_p<-summary(WBLMCOVARIATES_W)$coefficients[2,4] 
+SH_adj_p<-summary(SHLMCOVARIATES_W)$coefficients[2,4] 
+
+P_values_adj<-(c(Int_adj_p,ExtG_adj_p,ExtB_adj_p,WB_adj_p,SH_adj_p))
+
+p.adjust(P_values_adj, "bonferroni")
+
+```
+
+
+## **2. Univariate and multivariate linear regressions- for risk and promotive factors, using complete case data**
+Now, we will run analyses to explore which potential risk and promotive factors predict better/worse than expected mental health following exposure to sibling victimisation. The output from these analyses is presented in the supplementary section.
+
+Firstly, an additional piece of data preparation for the variable 'neighbourhood safety': 
+```{r}
+#Collapsing 'not at all safe' into 'not very safe' for neighbourhood safety (due to small sample size for 'not at all safe')
+filtered_final$collapsed_nhood <- filtered_final$neighbourhood_safety_14yrs %>% fct_collapse("Not very safe  "=c("Not very safe  ","Not at all safe"))
+summary(filtered_final$collapsed_nhood)
+
+#Changing the contrasts for the factor of neighbourhood safety, as dummy coding has 'Very safe' as reference level but we would like 'Not Very Safe' to be the reference level
+contrasts(filtered_final$collapsed_nhood) #dummy coding has Very Safe as reference level
+
+#recoding Not Very Safe (3rd level) as reference level
+contrasts(filtered_final$collapsed_nhood) = contr.treatment(3, base = 3)
+
+#checking new reference level
+contrasts(filtered_final$collapsed_nhood)
+```
+
+Now we will extract the residuals scores from each of the regression models run in part 1, so that the residuals can be entered into the later regressions as an indicator of resilience (doing better/worse than expected) to sibling victimisation:
+```{r}
+#For each outcome, creating a dataset which matches the length of the adjusted LM output, i.e. with missingness removed, (so that the extracted residuals can be added to a dataset with the other variables, and can eventually enter risk and promotive factor regressions)
+
+#Internalising-linear
+int_subset<- filtered_final[ ,c("Internalising_derived_17yr","Sum_victimisation")]
+int_noNA<- filtered_final[complete.cases(int_subset), ] 
+
+#Externalising
+ext_subset<- filtered_final[ ,c("Externalising_derived_17yr","Sum_victimisation")]
+ext_noNA<- filtered_final[complete.cases(ext_subset), ] 
+
+#Girls
+ext_subsetGIRLS<- filtered_finalGIRLS[ ,c("Externalising_derived_17yr","Sum_victimisation")]
+ext_noNAGIRLS<- filtered_finalGIRLS[complete.cases(ext_subsetGIRLS), ] 
+
+#BOYS
+ext_subsetBOYS<- filtered_finalBOYS[ ,c("Externalising_derived_17yr","Sum_victimisation")]
+ext_noNABOYS<- filtered_finalBOYS[complete.cases(ext_subsetBOYS), ] 
+
+#WB
+WB_subset<- filtered_final[ ,c("transformedWEMWBS","Sum_victimisation")]
+WB_noNA<- filtered_final[complete.cases(WB_subset), ] 
+
+#SH
+SH_subset<- filtered_final[ ,c("Self_harm_17yrs","Sum_victimisation")]
+SH_noNA<- testdata[complete.cases(SH_subset), ] 
+
+
+#Extracting the residuals scores FROM UNADJUSTED MODELS
+
+resid_int <-resid(InternalisingLM_W) 
+resid_extGIRLS <-resid(ExternalisingLM_W_GIRLS)
+resid_extBOYS <-resid(ExternalisingLM_W_BOYS)
+WB_noNA$resid_WEMWBS <-resid(WellbeingLM_W)
+resid_SH <- resid(SelfHarmLM_W)
+
+summary(resid_int)
+summary(resid_ext)
+summary(WB_noNA$resid_WEMWBS)
+summary(resid_SH)
+
+#Reverse coding where necessary so that a positive score= better than expected wellbeing/mental health, negative= worse than expected. The only outcome where this is not necessary is for wellbeing, as a positive score already indicated a higher level of wellbeing.
+
+int_noNA$reversed_resid_int<- resid_int*(-1)
+summary(int_noNA$reversed_resid_int)
+
+ext_noNAGIRLS$reversed_resid_ext <-resid_extGIRLS*(-1)
+summary(ext_noNAGIRLS$reversed_resid_ext)
+
+ext_noNABOYS$reversed_resid_ext <-resid_extBOYS*(-1)
+summary(ext_noNABOYS$reversed_resid_ext)
+
+
+SH_noNA$reversed_resid_SH <-resid_SH*(-1)
+summary(SH_noNA$reversed_resid_SH)
+```
+
+**Now we can run the regressions. First, for each outcome, we will run each factor individually, to explore how the factor predicts resilience to sibling victimisation:**
+```{r}
+#Internalising
+
+#Firstly, making a new dataframe to use for the regression, which is the length of the unadjusted linear model of sib vic predicting internalising problems, so that the internalising residuals values can be added to it
+
+subset_int<- filtered_final[ ,c( "Internalising_derived_17yr","Sum_victimisation")]
+subset_int_noNA<- filtered_final[complete.cases(subset_int),]
+subset_int_noNA$residuals <- int_noNA$reversed_resid_int
+
+#Overcrowding linear regression
+Overcrowding_Int_LM_W<- lm(scale(residuals)~scale(Overcrowding_14yr)+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_int_noNA) #model
+
+Overcrowding_Int_CI_W <-confint(Overcrowding_Int_LM_W) #confidence intervals
+
+summary(Overcrowding_Int_LM_W) #summary
+
+#Financial strain
+Financial_Int_LM_W <- lm(scale(residuals)~financial_strain_14yrs+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_int_noNA)
+
+Financial_Int_CI_W <-confint(Financial_Int_LM_W)
+
+summary(Financial_Int_LM_W)
+
+#Parental monitoring
+Monitoring_Int_LM_W <- lm(scale(residuals)~scale(SUM_parental_monitoring_14yrs)+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_int_noNA)
+
+Monitoring_Int_CI_W <-confint(Monitoring_Int_LM_W)
+
+summary(Monitoring_Int_LM_W)
+
+#Parental rel
+Rel_Int_LM_W <- lm(scale(residuals)~scale(recoded_parental_rel)+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_int_noNA)
+
+Rel_Int_CI_W <-confint(Rel_Int_LM_W)
+
+summary(Rel_Int_LM_W)
+
+#Close friends
+Friends_Int_LM_W <- lm(scale(residuals)~close_friends_14yrs+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_int_noNA)
+
+Friends_Int_CI_W<-confint(Friends_Int_LM_W)
+
+summary(Friends_Int_LM_W)
+
+#School motivation
+School_Int_LM_W <- lm(scale(residuals)~scale(SUM_school_motivation_14yrs)+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_int_noNA)
+
+School_Int_CI_W <-confint(School_Int_LM_W)
+
+summary(School_Int_LM_W)
+
+#Neighbourhood safety
+#recoding (as NA removed so is no longer a level)
+contrasts(subset_int_noNA$collapsed_nhood) = contr.treatment(3, base = 3)
+#checking new reference level
+contrasts(subset_int_noNA$collapsed_nhood)
+
+Nhood_Int_LM_W <- lm(scale(residuals)~collapsed_nhood+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_int_noNA)
+
+Nhood_Int_CI_W <-confint(Nhood_Int_LM_W)
+
+summary(Nhood_Int_LM_W)
+```
+
+```{r}
+#Externalising
+#Firstly, making a new dataframe to use for the regression, which is the length of the unadjusted linear model of sib vic predicting externalising problems, so that the externalising residuals values can be added to it
+filtered_finalGIRLS$collapsed_nhood <- filtered_finalGIRLS$neighbourhood_safety_14yrs %>% fct_collapse("Not very safe  "=c("Not very safe  ","Not at all safe"))
+summary(filtered_finalGIRLS$collapsed_nhood)
+
+#GIRLS
+subset_extGIRLS<- filtered_finalGIRLS[ ,c( "Externalising_derived_17yr","Sum_victimisation")]
+subset_ext_noNAGIRLS<- filtered_finalGIRLS[complete.cases(subset_extGIRLS),]
+subset_ext_noNAGIRLS$residuals <- ext_noNAGIRLS$reversed_resid_ext
+
+#Overcrowding linear regression
+Overcrowding_Ext_LM_W_Girls <- lm(scale(residuals)~scale(Overcrowding_14yr)+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_ext_noNAGIRLS)
+
+Overcrowding_Ext_CI_W_Girls<-confint(Overcrowding_Ext_LM_W_Girls)
+
+summary(Overcrowding_Ext_LM_W_Girls)
+
+#Financial strain
+Financial_Ext_LM_W_Girls <- lm(scale(residuals)~financial_strain_14yrs+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_ext_noNAGIRLS)
+
+Financial_Ext_CI_W_Girls <-confint(Financial_Ext_LM_W_Girls)
+
+summary(Financial_Ext_LM_W_Girls)
+
+#Parental monitoring
+Monitoring_Ext_LM_W_Girls <- lm(scale(residuals)~scale(SUM_parental_monitoring_14yrs)+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_ext_noNAGIRLS)
+
+Monitoring_Ext_CI_W_Girls <-confint(Monitoring_Ext_LM_W_Girls)
+
+summary(Monitoring_Ext_LM_W_Girls)
+
+#Parental rel
+Rel_Ext_LM_W_Girls<- lm(scale(residuals)~scale(recoded_parental_rel)+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_ext_noNAGIRLS)
+
+Rel_Ext_CI_W_Girls <-confint(Rel_Ext_LM_W_Girls)
+
+summary(Rel_Ext_LM_W_Girls)
+
+#Close friends
+Friends_Ext_LM_W_Girls <- lm(scale(residuals)~close_friends_14yrs+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_ext_noNAGIRLS)
+
+Friends_Ext_CI_W_Girls <-confint(Friends_Ext_LM_W_Girls)
+
+summary(Friends_Ext_LM_W_Girls)
+
+#School motivation
+School_Ext_LM_W_Girls <- lm(scale(residuals)~scale(SUM_school_motivation_14yrs)+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_ext_noNAGIRLS)
+
+School_Ext_CI_W_Girls <-confint(School_Ext_LM_W_Girls)
+
+summary(School_Ext_LM_W_Girls)
+
+#Neighbourhood safety
+#recoding (as NA removed so is no longer a level)
+
+contrasts(subset_ext_noNAGIRLS$collapsed_nhood) = contr.treatment(3, base = 3)
+#checking new reference level
+contrasts(subset_ext_noNAGIRLS$collapsed_nhood)
+
+Nhood_Ext_LM_W_Girls <- lm(scale(residuals)~collapsed_nhood+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_ext_noNAGIRLS)
+
+Nhood_Ext_CI_W_Girls<-confint(Nhood_Ext_LM_W_Girls)
+summary(Nhood_Ext_LM_W_Girls)
+
+#BOYS
+filtered_finalBOYS$collapsed_nhood <- filtered_finalBOYS$neighbourhood_safety_14yrs %>% fct_collapse("Not very safe  "=c("Not very safe  ","Not at all safe"))
+
+#Firstly, making a new dataframe to use for the regression, which is the length of the unadjusted linear model of sib vic predicting externalising problems, so that the externalising residuals values can be added to it
+subset_extBoys<- filtered_finalBOYS[ ,c( "Externalising_derived_17yr","Sum_victimisation")]
+
+subset_ext_noNABoys<- filtered_finalBOYS[complete.cases(subset_extBoys),]
+
+subset_ext_noNABoys$residuals <- ext_noNABOYS$reversed_resid_ext
+
+#Overcrowding linear regression
+Overcrowding_Ext_LM_W_Boys <- lm(scale(residuals)~scale(Overcrowding_14yr)+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_ext_noNABoys)
+
+Overcrowding_Ext_CI_W_Boys<-confint(Overcrowding_Ext_LM_W_Boys)
+
+summary(Overcrowding_Ext_LM_W_Boys)
+
+#Financial strain
+
+Financial_Ext_LM_W_Boys <- lm(scale(residuals)~financial_strain_14yrs+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_ext_noNABoys)
+
+Financial_Ext_CI_W_Boys <-confint(Financial_Ext_LM_W_Boys)
+
+summary(Financial_Ext_LM_W_Boys)
+
+#Parental monitoring
+Monitoring_Ext_LM_W_Boys <- lm(scale(residuals)~scale(SUM_parental_monitoring_14yrs)+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_ext_noNABoys)
+
+Monitoring_Ext_CI_W_Boys <-confint(Monitoring_Ext_LM_W_Boys)
+
+summary(Monitoring_Ext_LM_W_Boys)
+
+#Parental rel
+Rel_Ext_LM_W_Boys<- lm(scale(residuals)~scale(recoded_parental_rel)+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_ext_noNABoys)
+
+Rel_Ext_CI_W_Boys <-confint(Rel_Ext_LM_W_Boys)
+
+summary(Rel_Ext_LM_W_Boys)
+
+#Close friends
+Friends_Ext_LM_W_Boys <- lm(scale(residuals)~close_friends_14yrs+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_ext_noNABoys)
+
+Friends_Ext_CI_W_Boys <-confint(Friends_Ext_LM_W_Boys)
+
+summary(Friends_Ext_LM_W_Boys)
+
+#School motivation
+School_Ext_LM_W_Boys <- lm(scale(residuals)~scale(SUM_school_motivation_14yrs)+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_ext_noNABoys)
+
+School_Ext_CI_W_Boys <-confint(School_Ext_LM_W_Boys)
+
+summary(School_Ext_LM_W_Boys)
+
+#Neighbourhood safety
+filtered_finalBOYS$collapsed_nhood <- filtered_finalBOYS$neighbourhood_safety_14yrs %>% fct_collapse("Not very safe  "=c("Not very safe  ","Not at all safe"))
+summary(filtered_finalBOYS$collapsed_nhood)
+
+#recoding (as NA removed so is no longer a level)
+contrasts(subset_ext_noNABoys$collapsed_nhood) = contr.treatment(3, base = 3)
+#checking new reference level
+contrasts(subset_ext_noNABoys$collapsed_nhood)
+
+Nhood_Ext_LM_W_Boys <- lm(scale(residuals)~collapsed_nhood+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_ext_noNABoys)
+
+Nhood_Ext_CI_W_Boys<-confint(Nhood_Ext_LM_W_Boys)
+summary(Nhood_Ext_LM_W_Boys)
+```
+
+```{r}
+#Wellbeing
+#Firstly, making a new dataframe to use for the regression, which is the length of the unadjusted linear model of sib vic predicting wellbeing, so that the wellbeing residuals values can be added to it
+
+subset_WB<- filtered_final[ ,c( "transformedWEMWBS","Sum_victimisation")]
+subset_WB_noNA<- filtered_final[complete.cases(subset_WB),]
+subset_WB_noNA$residuals <-  WB_noNA$resid_WEMWBS
+
+#Overcrowding linear regression
+Overcrowding_WB_LM_W <- lm(scale(residuals)~scale(Overcrowding_14yr)+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_WB_noNA)
+
+Overcrowding_WB_CI_W <-confint(Overcrowding_WB_LM_W)
+
+summary(Overcrowding_WB_LM_W)
+
+#Financial strain
+Financial_WB_LM_W <- lm(scale(residuals)~financial_strain_14yrs+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_WB_noNA)
+
+Financial_WB_CI_W <-confint(Financial_WB_LM_W)
+
+summary(Financial_WB_LM_W)
+
+#Parental monitoring
+Monitoring_WB_LM_W<- lm(scale(residuals)~scale(SUM_parental_monitoring_14yrs)+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_WB_noNA)
+
+Monitoring_WB_CI_W <-confint(Monitoring_WB_LM_W)
+
+summary(Monitoring_WB_LM_W)
+
+#Parental rel
+Rel_WB_LM_W <- lm(scale(residuals)~scale(recoded_parental_rel)+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_WB_noNA)
+
+Rel_WB_CI_W <-confint(Rel_WB_LM_W)
+summary(Rel_WB_LM_W)
+
+#Close friends
+Friends_WB_LM_W <- lm(scale(residuals)~close_friends_14yrs+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_WB_noNA)
+
+Friends_WB_CI_W <-confint(Friends_WB_LM_W)
+
+summary(Friends_WB_LM_W)
+
+#School motivation
+School_WB_LM_W <- lm(scale(residuals)~scale(SUM_school_motivation_14yrs)+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_WB_noNA)
+
+School_WB_CI_W <-confint(School_WB_LM_W)
+summary(School_WB_LM_W)
+
+#Neighbourhood safety
+contrasts(subset_WB_noNA$collapsed_nhood) = contr.treatment(3, base = 3)
+#checking new reference level
+contrasts(subset_WB_noNA$collapsed_nhood)
+
+Nhood_WB_LM_W <- lm(scale(residuals)~collapsed_nhood+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_WB_noNA)
+
+Nhood_WB_CI_W <-confint(Nhood_WB_LM_W)
+
+summary(Nhood_WB_LM_W)
+```
+
+```{r}
+#Self-harm
+
+#Firstly, making a new dataframe to use for the regression, which is the length of the unadjusted linear model of sib vic predicting self-harm, so that the self harm residuals values can be added to it
+subset_SH<- filtered_final[ ,c( "Self_harm_17yrs","Sum_victimisation")]
+
+subset_SH_noNA<- filtered_final[complete.cases(subset_SH),]
+
+subset_SH_noNA$residuals <-  SH_noNA$reversed_resid_SH
+
+#Overcrowding linear regression
+Overcrowding_SH_LM_W <- lm(scale(residuals)~scale(Overcrowding_14yr)+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_SH_noNA)
+
+Overcrowding_SH_CI_W <-confint(Overcrowding_SH_LM_W)
+
+summary(Overcrowding_SH_LM_W)
+
+#Financial strain
+Financial_SH_LM_W <- lm(scale(residuals)~financial_strain_14yrs+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_SH_noNA)
+
+Financial_SH_CI_W <-confint(Financial_SH_LM_W)
+
+summary(Financial_SH_LM_W)
+
+#Parental monitoring
+Monitoring_SH_LM_W <- lm(scale(residuals)~scale(SUM_parental_monitoring_14yrs)+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_SH_noNA)
+
+Monitoring_SH_CI_W <-confint(Monitoring_SH_LM_W)
+summary(Monitoring_SH_LM_W)
+
+#Parental rel
+Rel_SH_LM_W <- lm(scale(residuals)~scale(recoded_parental_rel)+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_SH_noNA)
+
+Rel_SH_CI_W <-confint(Rel_SH_LM_W)
+
+summary(Rel_SH_LM_W)
+
+#Close friends
+Friends_SH_LM_W <- lm(scale(residuals)~close_friends_14yrs+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_SH_noNA)
+
+Friends_SH_CI_W<-confint(Friends_SH_LM_W)
+
+summary(Friends_SH_LM_W)
+
+#School motivation
+School_SH_LM_W <- lm(scale(residuals)~scale(SUM_school_motivation_14yrs)+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_SH_noNA)
+
+School_SH_CI_W <-confint(School_SH_LM_W)
+
+summary(School_SH_LM_W)
+
+#Neighbourhood safety
+contrasts(subset_SH_noNA$collapsed_nhood) = contr.treatment(3, base = 3)
+#checking new reference level
+contrasts(subset_SH_noNA$collapsed_nhood)
+
+Nhood_SH_LM_W <- lm(scale(residuals)~collapsed_nhood+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_SH_noNA)
+
+Nhood_SH_CI_W <-confint(Nhood_SH_LM_W)
+
+summary(Nhood_SH_LM_W)
+```
+
+**Multivariate linear regressions with ALL risk/ promotive factors for each outcome (and covariates) in one model:**
+```{r}
+#Internalising
+Int_risk_protect_lm_W <-lm(scale(residuals)~scale(Overcrowding_14yr) + financial_strain_14yrs+ scale(SUM_parental_monitoring_14yrs)+scale(recoded_parental_rel)+ close_friends_14yrs+scale(SUM_school_motivation_14yrs)+collapsed_nhood+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data=subset_int_noNA)
+
+Int_risk_protect_lm_CI_W <-confint(Int_risk_protect_lm_W)
+
+summary(Int_risk_protect_lm_W)
+
+#Externalising
+#Girls
+Ext_risk_protect_lm_W_Girls <-lm(scale(residuals)~scale(Overcrowding_14yr) + financial_strain_14yrs+ scale(SUM_parental_monitoring_14yrs)+scale(recoded_parental_rel)+ close_friends_14yrs+scale(SUM_school_motivation_14yrs)+collapsed_nhood+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data=subset_ext_noNAGIRLS)
+
+Ext_risk_protect_lm_CI_W_Girls <-confint(Ext_risk_protect_lm_W_Girls)
+
+summary(Ext_risk_protect_lm_W_Girls)
+
+#Boys
+Ext_risk_protect_lm_W_Boys <-lm(scale(residuals)~scale(Overcrowding_14yr) + financial_strain_14yrs+ scale(SUM_parental_monitoring_14yrs)+scale(recoded_parental_rel)+ close_friends_14yrs+scale(SUM_school_motivation_14yrs)+collapsed_nhood+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data=subset_ext_noNABoys)
+
+Ext_risk_protect_lm_CI_W_Boys <-confint(Ext_risk_protect_lm_W_Boys)
+
+summary(Ext_risk_protect_lm_W_Boys)
+
+#Wellbeing
+WB_risk_protect_lm_W <-lm(scale(residuals)~scale(Overcrowding_14yr) + financial_strain_14yrs+ scale(SUM_parental_monitoring_14yrs)+scale(recoded_parental_rel)+ close_friends_14yrs+scale(SUM_school_motivation_14yrs)+collapsed_nhood+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data=subset_WB_noNA)
+
+WB_risk_protect_lm_CI_W <-confint(WB_risk_protect_lm_W)
+
+summary(WB_risk_protect_lm_W)
+
+#Self-harm
+SH_risk_protect_lm_W <-lm(scale(residuals)~scale(Overcrowding_14yr) + financial_strain_14yrs+ scale(SUM_parental_monitoring_14yrs)+scale(recoded_parental_rel)+ close_friends_14yrs+scale(SUM_school_motivation_14yrs)+collapsed_nhood+ PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data=subset_SH_noNA)
+
+SH_risk_protect_lm_CI_W <-confint(SH_risk_protect_lm_W)
+
+summary(SH_risk_protect_lm_W)
+```
+
+## **3. Exploratory analysis with complete case data**
+
+We will run additional analyses to explore whether any promotive factors identified as statistically significant predictors of resilience in multivariate analyses, using complete case data (analyses above), are in fact protective factors (interact with sibling victimisation frequency). The output from these analyses is presented in the supplementary section.
+
+```{r}
+#Internalising
+#Monitoring
+Monitoring_Int_LM_exp<-lm(scale(residuals)~ scale(SUM_parental_monitoring_14yrs)*scale(Sum_victimisation)+ PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_int_noNA)
+
+summary(Monitoring_Int_LM_exp)
+
+Monitoring_Int_CI_exp <-confint(Monitoring_Int_LM_exp)
+
+
+#School motivation
+School_Int_LM_exp <- lm(scale(residuals)~scale(SUM_school_motivation_14yrs)*scale(Sum_victimisation)+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_int_noNA)
+
+School_Int_CI_exp <-confint(School_Int_LM_exp)
+
+summary(School_Int_LM_exp)
+
+#Neighbourhood safety-very safe
+VSafe_Int_LM_exp <- lm(scale(residuals)~collapsed_nhood*scale(Sum_victimisation)+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_int_noNA)
+
+VSafe_Int_CI_exp <-confint(VSafe_Int_LM_exp)
+
+summary(VSafe_Int_LM_exp)
+
+#Externalising- Girls
+
+#School motivation
+School_ExtG_LM_exp <- lm(scale(residuals)~scale(SUM_school_motivation_14yrs)*scale(Sum_victimisation)+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_ext_noNAGIRLS)
+
+School_ExtG_CI_exp <-confint(School_ExtG_LM_exp)
+
+summary(School_ExtG_LM_exp)
+
+#Neighbourhood safety-very safe
+VSafe_ExtG_LM_exp <- lm(scale(residuals)~collapsed_nhood*scale(Sum_victimisation)+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_ext_noNAGIRLS)
+
+summary(VSafe_ExtG_LM_exp)
+
+VSafe_ExtG_CI_exp <-confint(VSafe_ExtG_LM_exp)
+
+#Externalising- BOYS
+
+#School motivation
+School_ExtB_LM_exp <- lm(scale(residuals)~scale(SUM_school_motivation_14yrs)*scale(Sum_victimisation)+PTTYPE2+ step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_ext_noNABoys)
+
+School_ExtB_CI_exp <-confint(School_ExtB_LM_exp)
+
+summary(School_ExtB_LM_exp)
+
+#Wellbeing
+
+#close friends
+Friends_WB_LM_exp <- lm(scale(residuals)~close_friends_14yrs*scale(Sum_victimisation)+PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_WB_noNA)
+
+Friends_WB_CI_exp <-confint(Friends_WB_LM_exp)
+
+summary(Friends_WB_LM_exp)
+
+#School motivation
+School_WB_LM_exp <- lm(scale(residuals)~scale(SUM_school_motivation_14yrs):scale(Sum_victimisation) +PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_WB_noNA)
+
+School_WB_CI_exp <-confint(School_WB_LM_exp)
+
+summary(School_WB_LM_exp)
+
+#Self-harm
+
+#Monitoring
+Monitoring_SH_LM_exp<-lm(scale(residuals)~ scale(SUM_parental_monitoring_14yrs)*scale(Sum_victimisation)+ PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_SH_noNA)
+
+summary(Monitoring_SH_LM_exp)
+
+Monitoring_SH_CI_exp <-confint(Monitoring_SH_LM_exp)
+
+#school
+School_SH_LM_exp<- lm(scale(residuals)~scale(SUM_school_motivation_14yrs)*scale(Sum_victimisation)+ PTTYPE2+ CM_Sex+step_sibling_7yrs+scale(as.numeric(number_of_siblings_11yrs))+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs,data= subset_SH_noNA)
+
+School_SH_CI_exp <-confint(School_SH_LM_exp)
+
+summary(School_SH_LM_exp)
+```
+
+
+
+## **4. Missing data analysis- complete case data**
+
+We will now compare covariates between those with full sibling victimisation (exposure) and mental health and wellbeing data (outcome), and those with complete exposure data but incomplete outcome data. 
+
+```{r}
+#Create a variable using logical indexing to indicate whether or not have baseline data (data on bullying victimisation at age 11 and 14. True= yes, False= no)
+filtered_final$baseline <-!is.na(filtered_final$recoded11vic) & !is.na(filtered_final$recoded14vic) 
+
+#convert to factor so can make dummy variable
+filtered_final$baseline<-as.factor(filtered_final$baseline)
+str(filtered_final$baseline)
+
+#Create variable using logical indexing to indicate whether or not have outcome data (data on all mental health and wellbeing outcomes at age 17). True= yes, False= no)
+filtered_final$outcome <- !is.na(filtered_final$Internalising_derived_17yr) & !is.na(filtered_final$Externalising_derived_17yr) & !is.na(filtered_final$WEMWBS_17yrs) & !is.na(filtered_final$Self_harm_17yrs)
+
+#convert to factor so can make dummy variable
+filtered_final$outcome<-as.factor(filtered_final$outcome)
+str(filtered_final$outcome)
+
+#Create variable for those who have data at baseline and outcome (yes= TRUE, no= FALSE)
+filtered_final$complete <-(filtered_final$baseline == "TRUE" & filtered_final$outcome == "TRUE") 
+
+#convert to factor so can make dummy variable
+filtered_final$complete<-as.factor(filtered_final$complete)
+str(filtered_final$complete)
+
+#Create a variable for those who have data at baseline but not outcome (yes= TRUE, no= FALSE)
+filtered_final$baseline_only <-(filtered_final$baseline == "TRUE" & filtered_final$outcome == "FALSE")
+
+#convert to factor so can make dummy variable
+filtered_final$baseline_only<-as.factor(filtered_final$baseline_only)
+str(filtered_final$baseline_only)
+
+#Create a dummy variable where it is  0 if there is data at baseline and at outcome, and 1 if data at outcome only, NA if don't meet these conditions
+filtered_final<- filtered_final %>% mutate(sensitivity =
+                     case_when(complete=="TRUE" ~ "0", 
+                               complete=="FALSE"& baseline_only== "TRUE"~ "1"))
+```
+
+Now we can explore whether covariates correlate with the dummy variable for missingness:
+
+```{r}
+#child's biological sex
+
+contrasts(filtered_final$CM_Sex)= contr.treatment(2,base=2) #recode so male is compared to baseline of female
+
+sex<- cor.test(as.numeric(filtered_final$CM_Sex), as.numeric(filtered_final$sensitivity), 
+                    method = "spearman")
+sex
+sex$estimate
+sex$p.value
+
+#lives with step-sibling (compared to not living with a stepsibling)
+
+contrasts(filtered_final$StepSiblings7yrs)= contr.treatment(2,base=1)
+
+step_sib<-cor.test(as.numeric(filtered_final$step_sibling_7yrs), as.numeric(filtered_final$sensitivity), 
+                    method = "spearman")
+step_sib
+
+step_sib$estimate
+step_sib$p.value <-sprintf("%.3f",step_sib$p.value)
+
+#number of siblings in household
+
+sibs_hh<-cor.test(as.numeric(filtered_final$number_of_siblings_11yrs ), as.numeric(filtered_final$sensitivity), 
+                    method = "spearman")
+sibs_hh
+sibs_hh$estimate
+sibs_hh$p.value <-sprintf("%.3f",sibs_hh$p.value)
+
+#Early internalising symptoms
+Early_int <-cor.test(as.numeric(filtered_final$Internalising_derived_7yr ), as.numeric(filtered_final$sensitivity), 
+                    method = "spearman")
+Early_int
+Early_int$estimate
+Early_int$p.value <- sprintf("%.3f",Early_int$p.value)
+
+#Early externalising symptoms
+Early_ext <-cor.test(as.numeric(filtered_final$Externalising_derived_7yr ), as.numeric(filtered_final$sensitivity), 
+                    method = "spearman")
+Early_ext
+
+Early_ext$estimate
+Early_ext$p.value
+
+#ASD diagnosis
+contrasts(filtered_final$ASD_diagnosis_7yrs)= contr.treatment(2,base=2) #recode so diagnosis is compared to having no diagnosis
+
+ASD <-cor.test(as.numeric(filtered_final$ASD_diagnosis_7yrs ), as.numeric(filtered_final$sensitivity), 
+                    method = "spearman")
+
+ASD
+
+ASD$estimate
+ASD$p.value <-sprintf("%.3f",ASD$p.value)
+
+#Peer victimisation
+
+Peer <-cor.test(as.numeric(filtered_final$peer_problems_picked_on_bullied_parent_7yrs ), as.numeric(filtered_final$sensitivity), 
+                    method = "spearman")
+Peer
+Peer$estimate
+Peer$p.value <- sprintf("%.3f",Peer$p.value)
+
+#Maternal occuppation
+#recoding so that a higher status occupation is associated with a higher numeric value 
+filtered_final$RECODEDmatOcc <- 8-as.numeric(filtered_final$Maternal_occupation_3yr)
+
+Mat_occ<-cor.test(as.numeric(filtered_final$RECODEDmatOcc), as.numeric(filtered_final$sensitivity), 
+                    method = "spearman")
+
+Mat_occ
+Mat_occ$estimate
+Mat_occ$p.value
+
+#Household income
+Inc<-cor.test(as.numeric(filtered_final$household_income_3yr ), as.numeric(filtered_final$sensitivity), 
+                    method = "spearman")
+Inc
+Inc$estimate
+Inc$p.value
+
+#Maternal depression
+Mat_dep<-cor.test(as.numeric(filtered_final$parental_depression_7yrs ), as.numeric(filtered_final$sensitivity), 
+                    method = "spearman")
+Mat_dep
+Mat_dep$estimate
+Mat_dep$p.value <-sprintf("%.3f",Mat_dep$p.value)
+
+#Frequent parental alcohol use
+Freq_alc<-cor.test(as.numeric(filtered_final$frequent_alcohol_use ), as.numeric(filtered_final$sensitivity), 
+                    method = "spearman")
+Freq_alc
+Freq_alc$estimate
+Freq_alc$p.value <-sprintf("%.3f",Freq_alc$p.value)
+
+#Domestic violence
+contrasts(filtered_final$parental_domestic_violence_7years)= contr.treatment(3,base=2) #recode so DV is compared to no DV
+DV<-cor.test(as.numeric(filtered_final$parental_domestic_violence_7years ), as.numeric(filtered_final$sensitivity), 
+                    method = "spearman")
+DV
+DV$estimate
+DV$p.value<-sprintf("%.3f",DV$p.value)
+```
+
+## **5.Multiple imputation**
+
+Here we will use mice (multiple imputation using chained equations) to impute missing data in the risk factors, promotive factors, and covariates.  The mice package (van Buuren & Groothuis-Oudshoorn, 2011) will be used on a dataset with complete data on sibling victimisation and mental health outcomes at age 17. See here for more information on mice:https://cran.r-project.org/web/packages/mice/mice.pdf 
+
+##**Data preparation**
+
+We will remove those who have missing outcome data at age 17 from our main sample:
+```{r}
+
+#make a copy of our original dataset, to use for imputation purposes
+filtered_final_IMP <- filtered_final
+
+#filtering so that only those who have outcome data for ALL outcomes at age 17 are included 
+filtered_final_IMP<- filtered_final_IMP[!is.na(filtered_final_IMP$peer_prob_17ysr ) & !is.na(filtered_final_IMP$emotion_prob_17yrs )& !is.na(filtered_final_IMP$conduct_prob_17yrs) & !is.na(filtered_final_IMP$hyperactivity_17yrs ) & !is.na(filtered_final_IMP$WEMWBS_17yrs) & !is.na(filtered_final_IMP$cut_stabbed_17yrs) & !is.na(filtered_final_IMP$burned_17yrs) & !is.na(filtered_final_IMP$bruised_pinched_17yrs) &!is.na(filtered_final_IMP$overdose_17yrs) &!is.na(filtered_final_IMP$pulled_hair_17yrs) &!is.na(filtered_final_IMP$hurt_other_way_17yrs) &!is.na(filtered_final_IMP$end_life_17yrs),] 
+```
+Now, we wil run unadjusted (apart from sampling weights) linear regressions to extract residuals to add to our imputation dataset  (as later, the 'with' and 'pool' functions will not pool residuals, so needs to be done now prior to imputation):
+```{r}
+#linear model- scaling to get standardised beta coefficients
+#Internalising
+InternalisingLM_W <-lm(scale(Internalising_derived_17yr)~scale(Sum_victimisation)+PTTYPE2,data=filtered_final_IMP)
+summary(InternalisingLM_W)
+
+#Externalising
+ExternalisingLM_W <-lm(scale(Externalising_derived_17yr)~scale(Sum_victimisation)+PTTYPE2,data=filtered_final_IMP)
+summary(ExternalisingLM_W)
+
+#Wellbeing
+WellbeingLM_W <-lm(scale(WEMWBS_17yrs) ~scale(Sum_victimisation)+PTTYPE2,data=filtered_final_IMP)
+
+#Self-harm
+SelfHarmLM_W <-lm(Self_harm_17yrs~scale(Sum_victimisation)+PTTYPE2, data=filtered_final_IMP)
+
+#Extracting residuals
+resid_int <-resid(InternalisingLM_W) 
+
+resid_ext <-resid(ExternalisingLM_W)
+
+resid_WEMWBS <-resid(WellbeingLM_W)
+
+resid_SH <- resid(SelfHarmLM_W)
+
+#Reverse coding where necessary so that a positive score= better than expected wellbeing/mental health, negative= worse than expected
+resid_int<- resid_int*(-1)
+summary(resid_int)
+
+resid_ext <-resid_ext*(-1)
+summary(resid_ext)
+
+resid_SH <-resid_SH*(-1)
+summary(resid_SH)
+
+#Adding residuals to the dataframe
+filtered_final_IMP$resid_int <- resid_int
+filtered_final_IMP$resid_ext <-resid_ext
+filtered_final_IMP$resid_WB <-resid_WEMWBS
+filtered_final_IMP$resid_SH <-resid_SH
+```
+
+
+Next, we will check the structure of auxiliary variables (which will be added into the imputation model). We will transform them to an appropriate structure if necessary (i.e. if has loaded in wrongly from SPSS):
+```{r}
+# CM ethnicity
+str(filtered_final_IMP$CM_Ethnicity) #FACTOR
+
+#CM birthweight- change from factor to numeric
+str(filtered_final_IMP$CM_birthweight)
+filtered_final_IMP$CM_birthweight<- as.numeric(filtered_final_IMP$CM_birthweight) #NUMERIC
+
+# CM gestational age- change from factor to numeric
+str(filtered_final_IMP$CM_gestation)
+filtered_final_IMP$CM_gestation<- as.numeric(levels(filtered_final_IMP$CM_gestation))[filtered_final_IMP$CM_gestation]
+summary(filtered_final_IMP$CM_gestation) #Numeric
+
+#main caregiver age at birth- change from factor to numeric
+str(filtered_final_IMP$Mat_age_birth)
+filtered_final_IMP$Mat_age_birth<- as.numeric(levels(filtered_final_IMP$Mat_age_birth))[filtered_final_IMP$Mat_age_birth]
+summary(filtered_final_IMP$Mat_age_birth)#Numeric
+
+#maternal weight (kg) pre-birth- change from factor to numeric
+str(filtered_final_IMP$pre_weight) 
+filtered_final_IMP$pre_weight<- as.numeric(levels(filtered_final_IMP$pre_weight))[filtered_final_IMP$pre_weight]
+summary(filtered_final_IMP$pre_weight) #Numeric
+
+#maternal BMI pre birth- change from factor to numeric
+str(filtered_final_IMP$pre_BMI)
+filtered_final_IMP$pre_BMI<- as.numeric(levels(filtered_final_IMP$pre_BMI))[filtered_final_IMP$pre_BMI]
+summary(filtered_final_IMP$pre_BMI) #Numeric
+
+#homeownership
+str(filtered_final_IMP$house_tenure) #FACTOR
+
+#financial strain
+str(filtered_final_IMP$financial_strain_9m) #FACTOR
+
+#number of siblings
+str(filtered_final_IMP$number_of_sibling_s9m ) #Numeric
+
+
+#does anyone smoke in same room as CM
+str(filtered_final_IMP$Smoke_aroundCM) 
+summary(filtered_final_IMP$Smoke_aroundCM) #FACTOR
+
+#maternal alcohol consumption during pregnancy
+str(filtered_final_IMP$Mat_alc)
+summary(filtered_final_IMP$Mat_alc)#FACTOR
+
+#Main caregiver opinion of neighbourhood
+str(filtered_final_IMP$Mat_opin_area)
+summary(filtered_final_IMP$Mat_opin_area)#FACTOR
+
+#Highest academic qual of maincaregiver
+str(filtered_final_IMP$Highest_academ_mat)
+summary(filtered_final_IMP$Highest_academ_mat)#FACTOR
+
+#Maincaregiver depression- all factors
+str(filtered_final_IMP$Tired)
+summary(filtered_final_IMP$Tired) 
+
+str(filtered_final_IMP$miserable)
+summary(filtered_final_IMP$miserable)
+
+str(filtered_final_IMP$worried)
+summary(filtered_final_IMP$worried)
+
+str(filtered_final_IMP$rage)
+summary(filtered_final_IMP$rage)
+
+str(filtered_final_IMP$scared)
+summary(filtered_final_IMP$scared)
+
+str(filtered_final_IMP$irritated)
+summary(filtered_final_IMP$irritated)
+
+str(filtered_final_IMP$jittery)
+summary(filtered_final_IMP$jittery)
+
+str(filtered_final_IMP$nerves)
+summary(filtered_final_IMP$nerves)
+
+str(filtered_final_IMP$heart)
+summary(filtered_final_IMP$heart)
+
+#Main caregiver marital status- factor
+str(filtered_final_IMP$Marital_stat)
+summary(filtered_final_IMP$Marital_stat)
+
+#Main caregiver- domestic violence- factor
+str(filtered_final_IMP$Domestic_violence_9m)
+summary(filtered_final_IMP$Domestic_violence_9m)
+
+#Work status- factor
+str(filtered_final_IMP$paid_work)
+summary(filtered_final_IMP$paid_work) #factor
+
+#SDQ age 3- change from factor to numeric
+str(filtered_final_IMP$SDQ_3yrs)
+filtered_final_IMP$SDQ_3yrs<- as.numeric(levels(filtered_final_IMP$SDQ_3yrs))[filtered_final_IMP$SDQ_3yrs]
+summary(filtered_final_IMP$SDQ_3yrs) #Numeric
+
+#SDQ age 5- change from factor to numeric
+str(filtered_final_IMP$SDQ_5yrs)
+filtered_final_IMP$SDQ_5yrs<- as.numeric(levels(filtered_final_IMP$SDQ_5yrs))[filtered_final_IMP$SDQ_5yrs]
+summary(filtered_final_IMP$SDQ_5yrs)
+```
+
+Now to check the structure of the entire dataset, recoding any variables where necessary:
+```{r}
+str(filtered_final_IMP)
+
+#Recoding variables to numeric
+#SDQ age 7- changing from factor to numeric
+str(iltered_final_IMP$emotion_prob_7yr)
+filtered_final_IMP$emotion_prob_7yr<- as.numeric(levels(filtered_final_IMP$emotion_prob_7yr))[filtered_final_IMP$emotion_prob_7yr]
+describe(filtered_final_IMP$emotion_prob_7yr)
+
+str(filtered_final_IMP$peer_prob_7yr)
+filtered_final_IMP$peer_prob_7yr<- as.numeric(levels(filtered_final_IMP$peer_prob_7yr))[filtered_final_IMP$peer_prob_7yr]
+describe(filtered_final_IMP$peer_prob_7yr)
+
+str(filtered_final_IMP$hyperactivity_7yr)
+filtered_final_IMP$hyperactivity_7yr<- as.numeric(levels(filtered_final_IMP$hyperactivity_7yr))[filtered_final_IMP$hyperactivity_7yr]
+describe(filtered_final_IMP$hyperactivity_7yr)
+
+str(filtered_final_IMP$conduct_prob_7yr)
+filtered_final_IMP$conduct_prob_7yr<- as.numeric(levels(filtered_final_IMP$conduct_prob_7yr))[filtered_final_IMP$conduct_prob_7yr]
+describe(filtered_final_IMP$conduct_prob_7yr)
+
+#Number of siblings at 11 years from factor to numeric
+str(filtered_final_IMP$number_of_siblings_11yrs)
+filtered_final_IMP$number_of_siblings_11yrs<- as.numeric(levels(filtered_final_IMP$number_of_siblings_11yrs))[filtered_final_IMP$number_of_siblings_11yrs]
+summary(filtered_final_IMP$number_of_siblings_11yrs) #Numeric
+
+#Number of people in household at 14
+str(filtered_final_IMP$number_people_household_14yrs)
+filtered_final_IMP$number_people_household_14yrs<- as.numeric(levels(filtered_final_IMP$number_people_household_14yrs))[filtered_final_IMP$number_people_household_14yrs]
+describe(filtered_final_IMP$number_people_household_14yrs)
+
+#number of rooms in household at 14
+str(filtered_final_IMP$number_of_rooms_14yrs)
+filtered_final_IMP$number_of_rooms_14yrs<- as.numeric(levels(filtered_final_IMP$number_of_rooms_14yrs))[filtered_final_IMP$number_of_rooms_14yrs]
+describe(filtered_final_IMP$number_of_rooms_14yrs)
+
+#WEMWBS age 17
+str(filtered_final_IMP$WEMWBS_17yrs)
+filtered_final_IMP$WEMWBS_17yrs <- as.numeric(filtered_final_IMP$WEMWBS_17yrs)
+summary(filtered_final_IMP$WEMWBS_17yrs)
+
+#SDQ 17- factor to numeric
+str(filtered_final_IMP$emotion_prob_17yrs)
+filtered_final_IMP$emotion_prob_17yrs<- as.numeric(filtered_final_IMP$emotion_prob_17yrs)
+summary(filtered_final_IMP$emotion_prob_17yrs)
+
+str(filtered_final_IMP$peer_prob_17ysr)
+filtered_final_IMP$peer_prob_17ysr<- as.numeric(filtered_final_IMP$peer_prob_17ysr)
+summary(filtered_final_IMP$peer_prob_17ysr)
+
+str(filtered_final_IMP$hyperactivity_17yrs)
+filtered_final_IMP$hyperactivity_17yrs<- as.numeric(filtered_final_IMP$hyperactivity_17yrs)
+describe(filtered_final_IMP$hyperactivity_17yrs)
+
+str(filtered_final_IMP$conduct_prob_17yrs)
+filtered_final_IMP$conduct_prob_17yrs<- as.numeric(filtered_final_IMP$conduct_prob_17yrs)
+summary(filtered_final_IMP$conduct_prob_17yrs)
+
+#Now recheck structure
+str(filtered_final_IMP)
+```
+
+We will check the percentage of missing data for each variable:
+```{r}
+P_Missing<-colMeans(is.na(filtered_final_IMP))
+P_Missing                                                                               
+```
+
+After this, we will remove variables from our dataset which have high level of missingness/ no missingness so don't need to impute/ that have been previously derived for use in complete case data (we will derive them again after imputation):
+```{r}
+# Variables to exclude: maternal education (inc university education derived variables)and occupation, because they have >50% missing data: merge23imp$MCSID as duplicate of IDs; neighbourhood safety as used this for collapsed neighbourhood variable; sibling victimisation variables as  will only be using sibling victimisation frequency variable (and not imputing this); remaining variables are removed because they will be re-derived post-imputation or were only needed for complete case
+excl_vars <- names(filtered_final_IMP) %in% c("Maternal_education_3yr", "university_education", "Maternal_occupation_3yr","merge23$MCSID", "neighbourhood_safety_14yrs","sibling_victimisation_11yrs", "sibling_victimisation_14yrs", "recoded11vic", "recoded14vic", "bullied_one_timepoint", "bullied both", "REVERSE_victimisation_11","REVERSE_victimisation_14", "derived11vic", "derived14vic", "Internalising_derived_7yr","Externalising_derived_7yr","CM_is_eldest_child", "SUM_school_motivation_14yrs", "RECODEDparental_monitoring_who_14yrs","RECODEDparental_monitoring_what_14yrs", "RECODEDparental_monitoring_where_14yrs","Overcrowding_14yr","recoded_parental_rel", "frequent_alcohol_use","StepSiblings7yrs",
+ "RECODEDschool_motivation_try_best_14yrs","RECODEDschool_motivation_interesting_14yrs","SUM_parental_monitoring_14yrs", "transformedWEMWBS","baseline","outcome", "complete","baseline_only", "sensitivity","RECODEDmatOcc","not_bullied", "victimisation_categories", "converted_parental_depression","bullied_both")                     
+                                              
+# Subset dataset to only variables to be included in the imputation
+MCS_excl_vars <- filtered_final_IMP[!excl_vars]
+colnames(MCS_excl_vars)
+dim(MCS_excl_vars)
+
+# Double check the structure and distribution of these variables 
+str(MCS_excl_vars)
+```
+
+Random checks to ensure data is correctly merged:
+```{r}
+MCS_excl_vars%>% sample_n(3)
+```
+
+## **Running the imputation**
+
+Before running the full imputation, we will run an imputation with 0 iterations to extract the predictor matrix and methods of imputation. 
+The predictor matrix includes variables which will be used to impute values for other variables 1 means a variable is used to predict another variable, otherwise it is 0.No variable can be used to predict itself, so the intersection of 1 variable with itself in the matrix is 0.
+```{r}
+imp<- mice(MCS_excl_vars, maxit=0)
+
+# Extract predictor Matrix and methods of imputation 
+predM <- imp$predictorMatrix
+meth <- imp$method
+predM
+meth
+
+#Note: empty cells in the method matrix "" -> this means that those variables aren’t going to be imputed. Any variables (such as MCS ID,Cohort Member Number, residuals and exposure/ outcome variables) are empty because they do not contain missing data
+
+#Exploring warning events (there is only 1)
+head(imp$loggedEvents, 1) # warning that MCSID  has no missing data 
+```
+
+Now we can begin to run the full imputation. mice() considers each missing value to follow a specific distribution, and draws from this distribution a plausible value to replace the missing value. Each imputed dataset contains different random variation around the predicted values.Imputed datasets are stored in the “mids” object (Multiple Imputed Datasets). These datasets are copies of the original dataframe but missing values are now replaced with values generated by mice().Please note that running 10 iterations of 30 datasets took approximately 24 hours.
+```{r}
+#Set m to 5 datasets and maxit to 10 iterations
+imp_data <- mice(MCS_excl_vars, m=30, maxit = 10, 
+            predictorMatrix = predM, 
+            method = meth, print =  TRUE)
+
+#Export imp_data to an R data file (as backup)
+save(imp_data, file="imp_data.Rdata")
+
+#extract imputed datasets in long format
+MCS_imputed <- complete(imp_data, action="long", include=TRUE)
+
+#checking the structure
+str(MCS_imputed)
+```
+
+## **6. Regressions with imputed data**
+
+Now that we have our imputed data, we can re-run the analyses we previously ran with complete data, this time using the imputed data. 
+
+Firstly, we need to derive variables using the imputed data:
+
+## **Deriving variables**
+```{r}
+# Internalising problems at age 7 
+MCS_imputed$Internalising_derived_7yr <-MCS_imputed$peer_prob_7yr + MCS_imputed$emotion_prob_7yr 
+
+#Externalising problems at age 7 
+MCS_imputed$Externalising_derived_7yr <- MCS_imputed$conduct_prob_7yr + MCS_imputed$hyperactivity_7yr
+
+# Whether CM has older siblings? (Y/N) using if and else statements
+checkoldest <- function(sibl1, sibl2){
+  if(is.na(sibl1) || is.na(sibl2))
+  {
+    return("NA"); #if answered NA to either
+  }
+  else if(sibl2 > 0 && sibl1==0)
+  {
+    return("Yes"); #if no sibs at 9m but sibs at 11 yeats
+  }
+  else if(sibl1==0 && sibl2==0)
+  {
+    return("Only child"); #if an only child at both timepoints
+  }
+  else
+  {
+    return("No"); #otherwise- not the oldest 
+  }
+}
+
+MCS_imputed$CM_is_eldest_child <- mapply(checkoldest, 
+                                            as.numeric(MCS_imputed$number_of_sibling_s9m), 
+                                                 as.numeric(MCS_imputed$number_of_siblings_11yrs));
+
+#Number of rooms in household at 14
+str(MCS_imputed$number_of_rooms_14yrs)
+MCS_imputed$number_of_rooms_14yrs<- as.numeric(MCS_imputed$number_of_rooms_14yrs)
+
+#School engagement and motivation age 14
+#reverse coding for the variables where a higher score should equal more motivation (originally 1=Always means high motivation but a low score)
+
+#school_motivation_try_best_14yrs
+MCS_imputed$school_motivation_try_best_14yrs <- 5-as.numeric(MCS_imputed$school_motivation_try_best_14yrs)
+
+#school_motivation_interesting_14yrs
+MCS_imputed$school_motivation_interesting_14yrs <-5-as.numeric(MCS_imputed$school_motivation_interesting_14yrs)
+
+#converting remaining variables for school to numeric
+MCS_imputed$school_motivation_unhappy_14yrs<-as.numeric(MCS_imputed$school_motivation_unhappy_14yrs)
+MCS_imputed$school_motivation_tired_14yrs <-as.numeric(MCS_imputed$school_motivation_tired_14yrs)
+MCS_imputed$school_motivation_waste_of_time_14yrs<-as.numeric(MCS_imputed$school_motivation_waste_of_time_14yrs)
+MCS_imputed$school_motivation_difficult_keep_mind_on_work_14yrs<-as.numeric(MCS_imputed$school_motivation_difficult_keep_mind_on_work_14yrs)
+
+
+#summing school motivation and engagement variables (age 14)
+MCS_imputed$SUM_school_motivation_14yrs <- MCS_imputed$school_motivation_try_best_14yrs +MCS_imputed$school_motivation_interesting_14yrs+ as.numeric(MCS_imputed$school_motivation_unhappy_14yrs)+as.numeric(MCS_imputed$school_motivation_tired_14yrs)+as.numeric(MCS_imputed$school_motivation_waste_of_time_14yrs)+ as.numeric(MCS_imputed$school_motivation_difficult_keep_mind_on_work_14yrs)
+
+
+#Parental monitoring age 14
+#Firstly, reverse code so that scores of 1=always now=4, so the higher the score the higher the monitoring
+MCS_imputed$parental_monitoring_who_14yrs <- 5-as.numeric(MCS_imputed$parental_monitoring_who_14yrs)
+
+#Reversed_parental_monitoring_what_14yrs
+MCS_imputed$parental_monitoring_what_14yrs <- 5-as.numeric(MCS_imputed$parental_monitoring_what_14yrs)
+
+#Reversed_parental_monitoring_where_14yrs
+MCS_imputed$parental_monitoring_where_14yrs <- 5-as.numeric(MCS_imputed$parental_monitoring_where_14yrs)
+
+#Summing the three parental monitoring variables (age 14)
+MCS_imputed$SUM_parental_monitoring_14yrs <- MCS_imputed$parental_monitoring_who_14yrs +MCS_imputed$parental_monitoring_what_14yrs +MCS_imputed$parental_monitoring_where_14yrs
+
+#Parental relationship age 14, higher value= better quality relationship
+MCS_imputed$parent_rel_talk_about_important_14yrs <-7-as.numeric(MCS_imputed$parent_rel_talk_about_important_14yrs)
+
+#Overcrowding age 14? 
+MCS_imputed$Overcrowding_14yr <- MCS_imputed$number_people_household_14yrs /MCS_imputed$number_of_rooms_14yrs 
+summary(MCS_imputed$Overcrowding_14yr)
+
+#Frequent alcohol use: 1= Everyday, 2= 5-6 times per week, 3= 3-4 times per week, 4= 1-2 times per week, 5= 1-2 times per month, 6= less than once a month, 7= never [every day and 5-6 times per week (Yes) vs3-4 per week/1-2 per week/ 1-2 per month/never (No)] 
+summary(MCS_imputed$parental_substance_7yrs)
+deriving_freq_alc_yes_no <-MCS_imputed$parental_substance_7yrs== '1' |  MCS_imputed$parental_substance_7yrs== '2'
+
+MCS_imputed$frequent_alcohol_use<-deriving_freq_alc_yes_no 
+summary(MCS_imputed$frequent_alcohol_use)
+```
+
+We also need to do some additional data checks on the imputed dataset:
+```{r}
+#checking contrasts for risk factors with the structure of factor
+#Neighbourhood safety
+contrasts(MCS_imputed$collapsed_nhood) # need to change so that baseline reference level is for not very safe
+contrasts(MCS_imputed$collapsed_nhood)=contr.treatment(3,base=3)
+contrasts(MCS_imputed$collapsed_nhood)
+
+#Financial strain
+contrasts(MCS_imputed$financial_strain_14yrs) #comparing experiencing financial strain (1) to no financial strain (baseline reference group 0)
+
+#Close friends
+contrasts(MCS_imputed$close_friends_14yrs) #need to change it so that baseline reference level is for having a close friend
+contrasts(MCS_imputed$close_friends_14yrs)=contr.treatment(2,base=1)
+contrasts(MCS_imputed$close_friends_14yrs)
+```
+
+## **Regressions with imputed data**
+Now, we can re-run our previous analysis code for regressions, this time using imputed data. For all regression analyses, we will use the mids object as our dataset- by converting our MCS_imputed dataset into a mids object, this means that the mids object includes our imputed variables. We will use the with and pool functions for regressions, these average parameter estimates were averaged over the 30 imputed datasets, according to Rubin’s rules (White et al., 2011). To read more about with and pool, see https://www.rdocumentation.org/packages/mice/versions/3.14.0/topics/pool 
+
+
+```{r}
+#mids object for regressions, like original imp_data, but with added columns for derived variables. Will use this for regressions
+tmids = as.mids(MCS_imputed)
+
+#checking interaction between gender and sibling victimisation, to see whether we need to stratify any analyses for gender
+
+#Internalising
+InternalisingGenderIMP<- with(tmids,lm(scale(Internalising_derived_17yr)~scale(Sum_victimisation)+CM_Sex*scale(Sum_victimisation)))
+
+summary(InternalisingGenderIMP)
+
+InternalisingLMGenderIMP<-summary(pool(InternalisingGenderIMP))
+
+#Externalising
+ExternalisingGenderIMP<- with(tmids,lm(scale(Externalising_derived_17yr)~scale(Sum_victimisation)+CM_Sex*scale(Sum_victimisation)))
+
+summary(ExternalisingGenderIMP)
+
+ExternalisingLMGenderIMP<-summary(pool(ExternalisingGenderIMP)) #p <.05 so stratify 
+
+#WEMWBS
+WBGenderIMP<- with(tmids,lm(scale(WEMWBS_17yrs )~scale(Sum_victimisation)+CM_Sex*scale(Sum_victimisation)))
+
+summary(WBGenderIMP)
+
+WBGenderIMP<-summary(pool(WBGenderIMP))
+
+#Self-harm
+SHGenderIMP<- with(tmids,lm(scale(Self_harm_17yrs )~scale(Sum_victimisation)+CM_Sex*scale(Sum_victimisation)))
+
+summary(SHGenderIMP)
+
+SHGenderIMP<-summary(pool(SHGenderIMP))
+```
+
+**Firstly, we will run univariate analyses (unadjusted and adjusted) to explore the association between sibling victimisation frequency and later mental health.**  
+
+
+Unadjusted univariate regressions:
+```{r}
+#Internalising unadjusted 
+
+InternalisingLM_IMP<- with(tmids,lm(scale(Internalising_derived_17yr)~scale(Sum_victimisation)))
+
+summary(InternalisingLM_IMP)
+
+InternalisingLMPool<-summary(pool(InternalisingLM_IMP))
+
+#Externalising unadjusted
+
+#splitting by gender, to enter regressions
+#girls
+tmidsG <-filter(tmids, CM_Sex == "Female")
+
+#boys
+tmidsB <-filter(tmids, CM_Sex == "Male")
+
+#GIRLS
+ExternalisingLMG_IMP<- with(tmidsG,lm(scale(Externalising_derived_17yr)~scale(Sum_victimisation)))
+                   
+summary(ExternalisingLMG_IMP)
+
+ExternalisingLMGPool<-summary(pool(ExternalisingLMG_IMP))
+
+
+#BOYS
+ExternalisingLMB_IMP<- with(tmidsB,lm(scale(Externalising_derived_17yr)~scale(Sum_victimisation)))
+        
+summary(ExternalisingLMB_IMP)
+
+ExternalisingLMBPool<-summary(pool(ExternalisingLMB_IMP))
+
+#Wellbeing unadjusted
+WellbeingLM_IMP<- with(tmids,lm(scale(WEMWBS_17yrs)~scale(Sum_victimisation)))
+
+summary(WellbeingLM_IMP)
+
+WellbeingLMPool<-summary(pool(WellbeingLM_IMP))
+
+#Self-harm unadjusted
+SelfHarmLM_IMP <-with(tmids,lm(Self_harm_17yrs~scale(Sum_victimisation)))
+
+summary(SelfHarmLM_IMP)
+
+SelfHarmLMPool <- summary(pool(SelfHarmLM_IMP), conf.int = TRUE, exponentiate = TRUE)
+```
+
+Now, adjusted models:
+```{r}
+#Internalising
+InternalisingLMCOV_IMP<- with(tmids,lm(scale(Internalising_derived_17yr)~scale(Sum_victimisation)+CM_Sex+scale(number_of_siblings_11yrs)+ scale(parental_depression_7yrs)+as.numeric(parental_domestic_violence_7years)+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+as.numeric(ASD_diagnosis_7yrs)+as.numeric(frequent_alcohol_use)+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+InternalisingLMCOVPOOL_IMP<- summary(pool(InternalisingLMCOV_IMP))
+
+#Externalising
+#girls
+ExternalisingGLMCOV_IMP<- with(tmidsG,lm(scale(Externalising_derived_17yr)~scale(Sum_victimisation)+scale(number_of_siblings_11yrs)+ scale(parental_depression_7yrs)+as.numeric(parental_domestic_violence_7years)+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+as.numeric(ASD_diagnosis_7yrs)+as.numeric(frequent_alcohol_use)+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+summary(ExternalisingGLMCOV_IMP)
+
+ExternalisingGLMCOVPOOL<- summary(pool(ExternalisingGLMCOV_IMP))
+
+#boys
+ExternalisingBLMCOV_IMP<- with(tmidsB,lm(scale(Externalising_derived_17yr)~scale(Sum_victimisation)+scale(number_of_siblings_11yrs)+ scale(parental_depression_7yrs)+as.numeric(parental_domestic_violence_7years)+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+as.numeric(ASD_diagnosis_7yrs)+as.numeric(frequent_alcohol_use)+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+summary(ExternalisingBLMCOV_IMP)
+
+ExternalisingBLMCOVPOOL<- summary(pool(ExternalisingBLMCOV_IMP))
+
+#wellbeing
+WellbeingLMCOV_IMP<- with(tmids,lm(scale(WEMWBS_17yrs)~scale(Sum_victimisation)+CM_Sex+scale(number_of_siblings_11yrs)+ scale(parental_depression_7yrs)+as.numeric(parental_domestic_violence_7years)+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+as.numeric(ASD_diagnosis_7yrs)+as.numeric(frequent_alcohol_use)+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+summary(WellbeingLMCOV_IMP)
+
+WellbeingLMCOVPOOL<-summary(pool(WellbeingLMCOV_IMP))
+
+#self-harm
+SHLMCOV_IMP<- with(tmids,lm(scale(Self_harm_17yrs)~scale(Sum_victimisation)+CM_Sex+scale(number_of_siblings_11yrs)+ scale(parental_depression_7yrs)+as.numeric(parental_domestic_violence_7years)+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+as.numeric(ASD_diagnosis_7yrs)+as.numeric(frequent_alcohol_use)+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+summary(SHLMCOV_IMP)
+
+SHLMCOVPOOL<- summary(pool(SHLMCOV_IMP), conf.int = TRUE, exponentiate = TRUE)
+```
+
+
+#Now we will apply Bonferroni corrections, to correct for multiple testing. They do not change the significance levels
+```{r}
+#Unadjusted models
+Int_unad<-InternalisingLMPool[2,6]
+ExtG_unad<-ExternalisingLMGPool[2,6]
+ExtB_unad<-ExternalisingLMBPool[2,6]
+WB_unad<-WellbeingLMPool[2,6]
+SH_unad<-SelfHarmLMPool[2,6]
+
+pvaluesUnadj<-(c(Int_unad,ExtG_unad,ExtB_unad,WB_unad,SH_unad))
+
+p.adjust(pvaluesUnadj,method="bonferroni")
+
+#Adjusted models
+Int_ad<-InternalisingLMCOVPOOL[2,6]
+ExtG_ad<-ExternalisingGLMCOVPOOL[2,6]
+ExtB_ad<-ExternalisingBLMCOVPOOL[2,6]
+WB_ad<-WellbeingLMCOVPOOL[2,6]
+SH_ad<-SHLMCOVPOOL[2,6]
+
+pvaluesadj<-(c(Int_ad,ExtG_ad,ExtB_ad,WB_ad,SH_ad))
+
+p.adjust(pvaluesadj,method="bonferroni")
+```
+
+
+
+
+**Next, we will run univariate and multivariate regressions for the risk and promotive factors, using imputed data.** 
+
+Firstly, univariate analyses exploring each factor individually for each outcome (with covariates):
+
+```{r}
+#Internalising
+
+#Overcrowding
+Overcrowding_Int_LM_IMP<- with(tmids,lm(scale(resid_int)~scale(Overcrowding_14yr)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Overcrowding_Int_LMPOOL<-summary(pool(Overcrowding_Int_LM_IMP))
+
+#Financial strain
+Financial_Int_LM_IMP<- with(tmids,lm(scale(resid_int)~financial_strain_14yrs+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Financial_Int_LMPOOL<-summary(pool(Financial_Int_LM_IMP))
+
+#Parental monitoring
+Monitoring_Int_LM_IMP<- with(tmids,lm(scale(resid_int)~scale(SUM_parental_monitoring_14yrs)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Monitoring_Int_LMPOOL<-summary(pool(Monitoring_Int_LM_IMP))
+
+#Parental rel
+Rel_Int_LM_IMP<- with(tmids,lm(scale(resid_int)~scale(parent_rel_talk_about_important_14yrs)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Rel_Int_LMPOOL<-summary(pool(Rel_Int_LM_IMP))
+
+#Close friends
+Friends_Int_LM_IMP<- with(tmids,lm(scale(resid_int)~close_friends_14yrs+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Friends_Int_LMPOOL<-summary(pool(Friends_Int_LM_IMP))
+
+#School motivation
+
+School_Int_LM_IMP<- with(tmids,lm(scale(resid_int)~scale(SUM_school_motivation_14yrs)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+School_Int_LMPOOL<-summary(pool(School_Int_LM_IMP))
+
+#Neighbourhood safety
+Nhood_Int_LM_IMP<- with(tmids,lm(scale(resid_int)~collapsed_nhood+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Nhood_Int_LMPOOL<-summary(pool(Nhood_Int_LM_IMP))
+```
+
+
+```{r}
+#Externalising- GIRLS
+#Overcrowding linear regression
+Overcrowding_ExtG_LM_IMP_IMP<-  with(tmidsG,lm(scale(resid_ext)~scale(Overcrowding_14yr)+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Overcrowding_ExtG_LM_POOL<-summary(pool(Overcrowding_ExtG_LM_IMP_IMP))
+
+#Financial strain
+
+Financial_ExtG_LM_IMP <- with(tmidsG,lm(scale(resid_ext)~financial_strain_14yrs+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Financial_ExtG_LM_POOL<-summary(pool(Financial_ExtG_LM_IMP))
+
+#Parental monitoring
+Monitoring_ExtG_LM_IMP<- with(tmidsG,lm(scale(resid_ext)~scale(SUM_parental_monitoring_14yrs)+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Monitoring_ExtG_LM_POOL<-summary(pool(Monitoring_ExtG_LM_IMP))
+
+#Parental rel
+Rel_ExtG_LM_IMP<- with(tmidsG,lm(scale(resid_ext)~scale(parent_rel_talk_about_important_14yrs)+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Rel_ExtG_LM_POOL<-summary(pool(Rel_ExtG_LM_IMP))
+
+#Close friends
+Friends_ExtG_LM_IMP <- with(tmidsG,lm(scale(resid_ext)~close_friends_14yrs+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Friends_ExtG_LM_POOL<-summary(pool(Friends_ExtG_LM_IMP))
+
+#School motivation
+School_ExtG_LM_IMP<- with(tmidsG,lm(scale(resid_ext)~scale(SUM_school_motivation_14yrs)+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+School_ExtG_LM_POOL<-summary(pool(School_ExtG_LM_IMP))
+
+#Neighbourhood safety
+Nhood_ExtG_LM_IMP <- with(tmidsG,lm(scale(resid_ext)~collapsed_nhood+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Nhood_ExtG_LM_POOL<-summary(pool(Nhood_ExtG_LM_IMP))
+
+
+#Externalising- BOYS
+#Overcrowding linear regression
+Overcrowding_ExtB_LM_IMP_IMP<-  with(tmidsB,lm(scale(resid_ext)~scale(Overcrowding_14yr)+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Overcrowding_ExtB_LM_POOL<-summary(pool(Overcrowding_ExtB_LM_IMP_IMP))
+
+#Financial strain
+Financial_ExtB_LM_IMP_IMP <- with(tmidsB,lm(scale(resid_ext)~financial_strain_14yrs+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Financial_ExtB_LM_POOL<-summary(pool(Financial_ExtB_LM_IMP_IMP))
+
+#Parental monitoring
+Monitoring_ExtB_LM_IMP<- with(tmidsB,lm(scale(resid_ext)~scale(SUM_parental_monitoring_14yrs)+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Monitoring_ExtB_LM_POOL<-summary(pool(Monitoring_ExtB_LM_IMP))
+
+#Parental rel
+Rel_ExtB_LM_IMP<- with(tmidsB,lm(scale(resid_ext)~scale(parent_rel_talk_about_important_14yrs)+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Rel_ExtB_LM_POOL<-summary(pool(Rel_ExtB_LM_IMP))
+
+#Close friends
+Friends_ExtB_LM_IMP <- with(tmidsB,lm(scale(resid_ext)~close_friends_14yrs+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Friends_ExtB_LM_POOL<-summary(pool(Friends_ExtB_LM_IMP))
+
+#School motivation
+School_ExtB_LM_IMP<- with(tmidsB,lm(scale(resid_ext)~scale(SUM_school_motivation_14yrs)+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+School_ExtB_LM_POOL<-summary(pool(School_ExtB_LM_IMP))
+
+#Neighbourhood safety
+Nhood_ExtB_LM_IMP <- with(tmidsB,lm(scale(resid_ext)~collapsed_nhood+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Nhood_ExtB_LM_POOL<-summary(pool(Nhood_ExtB_LM_IMP))
+```
+
+```{r}
+#Wellbeing
+#Overcrowding linear regression
+Overcrowding_WB_LM_IMP<-  with(tmids,lm(scale(resid_WB)~scale(Overcrowding_14yr)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Overcrowding_WB_LMPOOL<-summary(pool(Overcrowding_WB_LM_IMP))
+
+#Financial strain
+Financial_WB_LM_IMP <- with(tmids,lm(scale(resid_WB)~financial_strain_14yrs+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Financial_WB_LMPOOL<-summary(pool(Financial_WB_LM_IMP))
+
+#Parental monitoring
+Monitoring_WB_LM_IMP<- with(tmids,lm(scale(resid_WB)~scale(SUM_parental_monitoring_14yrs)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Monitoring_WB_LMPOOL<-summary(pool(Monitoring_WB_LM_IMP))
+
+#Parental rel
+Rel_WB_LM_IMP<- with(tmids,lm(scale(resid_WB)~scale(parent_rel_talk_about_important_14yrs)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Rel_WB_LMPOOL<-summary(pool(Rel_WB_LM_IMP))
+
+#Close friends
+Friends_WB_LM_IMP <- with(tmids,lm(scale(resid_WB)~close_friends_14yrs+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Friends_WB_LMPOOL<-summary(pool(Friends_WB_LM_IMP))
+
+#School motivation
+School_WB_LM_IMP<- with(tmids,lm(scale(resid_WB)~scale(SUM_school_motivation_14yrs)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+School_WB_LMPOOL<-summary(pool(School_WB_LM_IMP))
+
+#Neighbourhood safety
+Nhood_WB_LM_IMP <- with(tmids,lm(scale(resid_WB)~collapsed_nhood+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Nhood_WB_LMPOOL<-summary(pool(Nhood_WB_LM_IMP))
+```
+
+```{r}
+#Self-harm
+#Overcrowdinglinear regression
+Overcrowding_SH_LM_IMP<-  with(tmids,lm(scale(resid_SH)~scale(Overcrowding_14yr)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Overcrowding_SH_LMPOOL<-summary(pool(Overcrowding_SH_LM_IMP))
+
+#Financial strain
+Financial_SH_LM_IMP <- with(tmids,lm(scale(resid_SH)~financial_strain_14yrs+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Financial_SH_LMPOOL<-summary(pool(Financial_SH_LM_IMP))
+
+#Parental monitoring
+Monitoring_SH_LM_IMP<- with(tmids,lm(scale(resid_SH)~scale(SUM_parental_monitoring_14yrs)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Monitoring_SH_LMPOOL<-summary(pool(Monitoring_SH_LM_IMP))
+
+#Parental rel
+Rel_SH_LM_IMP<- with(tmids,lm(scale(resid_SH)~scale(parent_rel_talk_about_important_14yrs)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Rel_SH_LMPOOL<-summary(pool(Rel_SH_LM_IMP))
+
+#Close friends
+Friends_SH_LM_IMP<- with(tmids,lm(scale(resid_SH)~close_friends_14yrs+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Friends_SH_LMPOOL<-summary(pool(Friends_SH_LM_IMP))
+
+#School motivation
+School_SH_LM_IMP<- with(tmids,lm(scale(resid_SH)~scale(SUM_school_motivation_14yrs)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+School_SH_LMPOOL<-summary(pool(School_SH_LM_IMP))
+
+#Neighbourhood safety
+Nhood_SH_LM_IMP <- with(tmids,lm(scale(resid_SH)~collapsed_nhood+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Nhood_SH_LMPOOL<-summary(pool(Nhood_SH_LM_IMP))
+```
+
+**Secondly, all factors in one adjusted model per outcome:**
+```{r}
+#Internalising
+Int_risk_protect_lm_IMP <-with(tmids,lm(scale(resid_int)~scale(Overcrowding_14yr) + financial_strain_14yrs+ scale(SUM_parental_monitoring_14yrs)+scale(parent_rel_talk_about_important_14yrs)+ close_friends_14yrs+scale(SUM_school_motivation_14yrs)+collapsed_nhood+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Int_risk_protect_lmPOOL<-summary(pool(Int_risk_protect_lm_IMP))
+
+#Externalising
+#Girls
+Ext_risk_protect_lm_Girls_IMP <-with(tmidsG,lm(scale(resid_ext)~scale(Overcrowding_14yr) + financial_strain_14yrs+ scale(SUM_parental_monitoring_14yrs)+scale(parent_rel_talk_about_important_14yrs)+ close_friends_14yrs+scale(SUM_school_motivation_14yrs)+collapsed_nhood+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+ExtG_risk_protect_lmPOOL<-summary(pool(Ext_risk_protect_lm_Girls_IMP))
+
+#Boys
+Ext_risk_protect_lm_Boys_IMP <-with(tmidsB,lm(scale(resid_ext)~scale(Overcrowding_14yr) + financial_strain_14yrs+ scale(SUM_parental_monitoring_14yrs)+scale(parent_rel_talk_about_important_14yrs)+ close_friends_14yrs+scale(SUM_school_motivation_14yrs)+collapsed_nhood+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+ExtB_risk_protect_lmPOOL<-summary(pool(Ext_risk_protect_lm_Boys_IMP))
+
+#Wellbeing
+WB_risk_protect_lm_IMP<-with(tmids,lm(scale(resid_WB)~scale(Overcrowding_14yr) + financial_strain_14yrs+ scale(SUM_parental_monitoring_14yrs)+scale(parent_rel_talk_about_important_14yrs)+ close_friends_14yrs+scale(SUM_school_motivation_14yrs)+collapsed_nhood+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+WB_risk_protect_lmPOOL<-summary(pool(WB_risk_protect_lm_IMP))
+
+#Self-harm
+SH_risk_protect_lm_IMP <-with(tmids,lm(scale(resid_SH)~scale(Overcrowding_14yr) + financial_strain_14yrs+ scale(SUM_parental_monitoring_14yrs)+scale(parent_rel_talk_about_important_14yrs)+ close_friends_14yrs+scale(SUM_school_motivation_14yrs)+collapsed_nhood+  CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+SH_risk_protect_lmPOOL<-summary(pool(SH_risk_protect_lm_IMP))
+```
+
+## **Exploratory analyses** 
+
+(for promotive factors)
+
+```{r}
+#Internalising
+#Parental monitoring
+Monitoring_Int_LM_exp_IMP<- with(tmids,lm(scale(resid_int)~scale(SUM_parental_monitoring_14yrs)*scale(Sum_victimisation)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Monitoring_Int_LMPOOL_exp<-summary(pool(Monitoring_Int_LM_exp_IMP))
+
+#School motivation
+School_Int_LM_exp_IMP<- with(tmids,lm(scale(resid_int)~scale(SUM_school_motivation_14yrs)*scale(Sum_victimisation)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+School_Int_LMPOOL_exp<-summary(pool(School_Int_LM_exp_IMP))
+
+#Neighbourhood safety
+Nhood_Int_LM_exp_IMP <- with(tmids,lm(scale(resid_int)~collapsed_nhood*scale(Sum_victimisation)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Nhood_Int_LMPOOL_exp<-summary(pool(Nhood_Int_LM_exp_IMP))
+
+#Externalising- girls
+#School motivation
+School_ExtG_LM_exp_IMP<- with(tmidsG,lm(scale(resid_ext)~scale(SUM_school_motivation_14yrs)*scale(Sum_victimisation)+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+School_ExtG_LMPOOL_exp<-summary(pool(School_ExtG_LM_exp_IMP))
+
+#Neighbourhood safety
+Nhood_ExtG_LM_exp_IMP <- with(tmidsG,lm(scale(resid_ext)~collapsed_nhood*scale(Sum_victimisation)+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Nhood_ExtG_LMPOOL_exp<-summary(pool(Nhood_ExtG_LM_exp_IMP))
+
+#Externalising- boys
+#School motivation
+School_ExtB_LM_exp_IMP<- with(tmidsB,lm(scale(resid_ext)~scale(SUM_school_motivation_14yrs)*scale(Sum_victimisation)+ step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+School_ExtB_LMPOOL_exp<-summary(pool(School_ExtB_LM_exp_IMP))
+
+#Wellbeing
+
+#School motivation
+School_WB_LM_exp_IMP<- with(tmids,lm(scale(resid_WB)~scale(SUM_school_motivation_14yrs)*scale(Sum_victimisation)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+School_WB_LMPOOL_exp<-summary(pool(School_WB_LM_exp_IMP))
+
+#Neighbourhood safety
+Nhood_WB_LM_exp_IMP <- with(tmids,lm(scale(resid_WB)~collapsed_nhood*scale(Sum_victimisation)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Nhood_WB_LMPOOL_exp<-summary(pool(Nhood_WB_LM_exp_IMP))
+
+#Self-harm
+#Parental monitoring
+Monitoring_SH_LM_exp_IMP<- with(tmids,lm(scale(resid_SH)~scale(SUM_parental_monitoring_14yrs)*scale(Sum_victimisation)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Monitoring_SH_LMPOOL_exp<-summary(pool(Monitoring_SH_LM_exp_IMP))
+
+#School motivation
+School_SH_LM_exp_IMP<- with(tmids,lm(scale(resid_SH)~scale(SUM_school_motivation_14yrs)*scale(Sum_victimisation)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+School_SH_LMPOOL_exp<-summary(pool(School_SH_LM_exp_IMP))
+
+#Neighbourhood safety
+Nhood_SH_LM_exp_IMP <- with(tmids,lm(scale(resid_SH)~collapsed_nhood*scale(Sum_victimisation)+ CM_Sex+step_sibling_7yrs+scale(number_of_siblings_11yrs)+scale(parental_depression_7yrs)+parental_domestic_violence_7years+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+ASD_diagnosis_7yrs+frequent_alcohol_use+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+Nhood_SH_LMPOOL_exp<-summary(pool(Nhood_SH_LM_exp_IMP))
+```
+
+**Exploratory analysis**
+
+We will further explore the association between sibling victimisation and self-harm, we will split the self-harm outcome variable into self-harm with and without suicidal intent:
+```{r}
+#Separating out self-harm to self-harm with suicidal intent:
+#number who selected 'yes' to intent to end life question
+MCS_imputed$SSSI <- MCS_imputed$end_life_17yrs=='Yes'
+summary(MCS_imputed$SSSI)
+
+#number who self-harmed in any other way
+MCS_imputed$SHWSI<- MCS_imputed$cut_stabbed_17yrs == 'Yes' | MCS_imputed$burned_17yrs=='Yes'|MCS_imputed$bruised_pinched_17yrs=='Yes' | MCS_imputed$overdose_17yrs=='Yes' | MCS_imputed$pulled_hair_17yrs=='Yes' | MCS_imputed$hurt_other_way_17yrs=='Yes'&MCS_imputed$end_life_17yrs=='No'
+
+summary(MCS_imputed$SHWSI)
+
+#adding these new self-harm categories to tmids, for further analyses:
+tmids = as.mids(MCS_imputed)
+
+#Univariate regression analyses split by self-harm type
+#without suicidal intent
+SHWSI_lm<- with(tmids,lm(scale(SHWSI)~scale(Sum_victimisation)+CM_Sex+scale(number_of_siblings_11yrs)+ scale(parental_depression_7yrs)+as.numeric(parental_domestic_violence_7years)+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+as.numeric(ASD_diagnosis_7yrs)+as.numeric(frequent_alcohol_use)+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+summary(SHWSI_lm)
+
+SHWSI_lmPOOL<- summary(pool(SHWSI_lm), conf.int = TRUE, exponentiate = TRUE)
+
+#with suicidal intent
+SSSI_lm<- with(tmids,lm(scale(SSSI)~scale(Sum_victimisation)+CM_Sex+scale(number_of_siblings_11yrs)+ scale(parental_depression_7yrs)+as.numeric(parental_domestic_violence_7years)+scale(Internalising_derived_7yr)+scale(Externalising_derived_7yr)+as.numeric(ASD_diagnosis_7yrs)+as.numeric(frequent_alcohol_use)+household_income_3yr+peer_problems_picked_on_bullied_parent_7yrs))
+
+summary(SSSI_lm)
+
+SSSI_lmPOOL<- summary(pool(SSSI_lm), conf.int = TRUE, exponentiate = TRUE)
+
+```
+
+## **R session info**
+```{r}
+sessionInfo()
+```
+
